@@ -11,14 +11,112 @@
             margin: 0;
             padding: 0;
         }
+        .wrap {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: grid;
+            /* align-items: center;
+            justify-content: center; */
+            grid-template-columns: 7fr 3fr;
+        }
+        .sketch-board-wrap {
+            display: grid;
+            /* width: 800px;
+            height: 800px; */
+            background-color: rgb(218, 231, 255);
+        }
+        .preview-img {
+            width: 100%;
+            display: block;
+        }
     </style>
 </head>
 <body>
-    <div>
-
+    <div class="wrap">
+        <div id="sketchBoardWrap" class="sketch-board-wrap"></div>
+        <div id="addonWrap">
+            <button id="exportPic">export</button>
+            <div id="message"></div>
+        </div>
     </div>
+    <!-- <script src="./lodash.min.js"></script> -->
     <script type="module">
-        import sketchBoard from 'sketchBoard.js'
+        import sketchBoard from './sketchBoard.js'
+        const _sketchBoardWrap = document.getElementById('sketchBoardWrap')
+        const _previewImg = document.getElementById('previewImg')
+        const _exportPic = document.getElementById('exportPic')
+        const _message = document.getElementById('message')
+        const _addonWrap = document.getElementById('addonWrap')
+        const _sketchBoardIns = new sketchBoard({
+            wrap: _sketchBoardWrap
+        })
+        _sketchBoardWrap.appendChild(_sketchBoardIns.getWrapDom())
+        _sketchBoardIns.setDrawType('rect')
+        // _sketchBoardIns.setBackground({
+        //     src: `./groupPics/3.jpg`,
+        // })
+        
+        async function loadPlicBackground() {
+            let spliceIndex = 39;
+            const totalNums = 39
+            while(spliceIndex >= 0) {
+                await _sketchBoardIns.spliceBackground({
+                    src: `./groupPics/${spliceIndex}.jpg`,
+                    offsetY: 1002*(totalNums-spliceIndex)
+                })
+                spliceIndex = spliceIndex - 1
+            }
+        }
+        function downloadFile(data, fileName, type="text/plain") {
+            // Create an invisible A element
+            const a = document.createElement("a");
+            a.style.display = "none";
+            document.body.appendChild(a);
+
+            // Set the HREF to a Blob representation of the data to be downloaded
+            a.href = window.URL.createObjectURL(data);
+
+            // Use download attribute to set set desired file name
+            a.setAttribute("download", fileName);
+
+            // Trigger the download by simulating click
+            a.click();
+
+            // Cleanup
+            window.URL.revokeObjectURL(a.href);
+            document.body.removeChild(a);
+        }
+        loadPlicBackground()
+        _exportPic.addEventListener('click', ()=>{
+            _message.innerHTML = 'loading...'
+            setTimeout(()=> {
+                _sketchBoardIns.exportPic({
+                    type: 'splice',
+                    zoomSize: 0.95
+                }).then(res=>{
+                    _message.innerHTML = 'success...'
+                    const {success, data, message} = res;
+                    if (data) {
+                        downloadFile(data, data.name)
+                    } else {
+                        _message.innerHTML = 'oversize...'
+                    }
+                    // const newImg = document.createElement("img");
+                    // newImg.style.cssText = `width: 100%;display:block;`
+                    // newImg.onload = () => {
+                    //     // no longer need to read the blob so it's revoked
+                    //     window.URL.revokeObjectURL(_url);
+                    // };
+                    // newImg.src = _url
+                    // _addonWrap.appendChild(newImg);
+                })
+            }, 1000)
+            
+            
+        })
     </script>
 </body>
 </html>

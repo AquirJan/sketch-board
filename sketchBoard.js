@@ -2,7 +2,7 @@
 // version 1.0.0
 import recordActionHistory from './recordActionHistory.js';
 import cloneDeep from './lodash.clonedeep.js';
-export default class sbBoard {
+export default class sketchBoard {
   constructor(options) {
     this.options = Object.assign(
       {
@@ -49,7 +49,7 @@ export default class sbBoard {
     };
     this.isObserver = false; // 是否观察者模式
     this.tmpRect = null;
-    this.bgObj = null;
+    this.bgObj = undefined;
     this.existBrushObj = null; // 已有笔刷图
     this.existAlogrithmObj = null; // 已有算法特定图
     this.pencilPosition = null;
@@ -90,8 +90,8 @@ export default class sbBoard {
     this.sbDomKeydownFn = null;
     this.sbDomKeyupFn = null;
     this.magnifierDom = null; // 放大镜容器 
-    this.blackMask = null; // 黑色蒙层
     this.preventDelete = false; // 是否阻止快捷键删除
+    this.spliceBgList = []; // 拼接图片临时数组
 
     this.singleLog = false;
     return this.init();
@@ -193,40 +193,53 @@ export default class sbBoard {
       this.options['height'] = _wrapRect.clientHeight;
       this.sbDom.width = this.options.width;
       this.sbDom.height = this.options.height;
-      let _bgObj = {
-        success: true,
-        fillStyle: this.bgObj && this.bgObj.fillStyle ? this.bgObj.fillStyle : 'transparent',
-        scaled: 1,
-        offsetX: 0,
-        offsetY: 0,
-        viewWidth: _wrapRect.clientWidth,
-        viewHeight: _wrapRect.clientHeight,
-        width: _wrapRect.clientWidth,
-        height: _wrapRect.clientHeight
-      };
-      if (this.bgObj && this.bgObj.data) {
-        const { height, width, scaled, offsetX, offsetY } = this.calcImageSize(this.bgObj.data.naturalWidth, this.bgObj.data.naturalHeight);
-        _bgObj = {
-          src: this.bgObj.src,
+
+      if (this.spliceBgList && this.spliceBgList.length) {
+        // const _lastChild = this.spliceBgList[this.spliceBgList.length-1]
+        const _scaledList = this.spliceBgList.map(val => val.scaled)
+        const _originScaled = Math.min(..._scaledList)
+        this.zoomSize = _originScaled;
+        this.dragOffset = {
+          x: 0,
+          y: 0
+        };
+      } else {
+        let _bgObj = {
           success: true,
-          msg: 'load image complite',
-          data: this.bgObj.data,
-          scaled,
-          offsetX,
-          offsetY,
-          viewWidth: width,
-          viewHeight: height,
-          width: this.bgObj.data.naturalWidth,
-          height: this.bgObj.data.naturalHeight
+          fillStyle: this.bgObj && this.bgObj.fillStyle ? this.bgObj.fillStyle : 'transparent',
+          scaled: 1,
+          offsetX: 0,
+          offsetY: 0,
+          viewWidth: _wrapRect.clientWidth,
+          viewHeight: _wrapRect.clientHeight,
+          width: _wrapRect.clientWidth,
+          height: _wrapRect.clientHeight
+        };
+        if (this.bgObj && this.bgObj.data) {
+          const { height, width, scaled, offsetX, offsetY } = this.calcImageSize(this.bgObj.data.naturalWidth, this.bgObj.data.naturalHeight);
+          _bgObj = {
+            src: this.bgObj.src,
+            success: true,
+            msg: 'load image complite',
+            data: this.bgObj.data,
+            scaled,
+            offsetX,
+            offsetY,
+            viewWidth: width,
+            viewHeight: height,
+            width: this.bgObj.data.naturalWidth,
+            height: this.bgObj.data.naturalHeight
+          };
+        }
+  
+        this.bgObj = _bgObj;
+        this.zoomSize = this.bgObj.scaled;
+        this.dragOffset = {
+          x: this.bgObj.offsetX,
+          y: this.bgObj.offsetY
         };
       }
-
-      this.bgObj = _bgObj;
-      this.zoomSize = this.bgObj.scaled;
-      this.dragOffset = {
-        x: this.bgObj.offsetX,
-        y: this.bgObj.offsetY
-      };
+      
       this.resizing = false;
     }
   }
@@ -259,7 +272,7 @@ export default class sbBoard {
     let _draws = this.originDraws
     let _limitPolygon = undefined;
     let _flag = false;
-    const _removeList = ["tycrect"];
+    const _removeList = ["rect"];
     for(let i=0;i<_draws.length;i++) {
       if (_draws[i].drawType === 'polygonClip') {
         _limitPolygon = _draws[i]
@@ -413,6 +426,48 @@ export default class sbBoard {
   setObserverMode(isObserver = true) {
     this.selectedDraw = null;
     this.isObserver = isObserver;
+  }
+
+  // 拼接背景图
+  async spliceBackground(obj={}){
+    return new Promise(async resolve=>{
+      const _obj = Object.assign({
+        offsetX: 0,
+        offsetY: 0,
+        src: ''
+      }, obj)
+      if (_obj.src) {
+        let _bgSection = await this.asyncLoadImage(_obj.src);
+        _bgSection = Object.assign(_bgSection, {
+          offsetX: _obj.offsetX,
+          offsetY: _obj.offsetY,
+        })
+        if (_bgSection.success) {
+          this.spliceBgList.push(_bgSection)
+          let prevScaled = 1
+          if (this.spliceBgList.length>0) {
+            prevScaled = this.spliceBgList[this.spliceBgList.length-1].scaled
+          }
+          this.zoomSize = Math.min(prevScaled, _bgSection.scaled);
+          this.options.pencilStyle.lineWidth = 1/this.zoomSize*2.5
+          this.options.adjustDotStyle.lineWidth = 1/this.zoomSize*3
+        }
+        resolve()
+      } else {
+        resolve()
+      }
+      
+    })
+  }
+  removeSpliceBackground() {
+    this.dragOffset = {
+      x: 0,
+      y: 0
+    }
+    this.spliceBgList = []
+    this.zoomSize = 1;
+    this.options.pencilStyle.lineWidth = 1/this.zoomSize*2.5
+    this.options.adjustDotStyle.lineWidth = 1/this.zoomSize*3
   }
   // 设置背景图
   async setBackground(obj) {
@@ -637,10 +692,6 @@ export default class sbBoard {
   // 工具栏用方法
   // 清除
   clearWhole(publicUse = true) {
-    let clearSize = {
-      width: this.sbDom.width,
-      height: this.sbDom.height
-    };
     if (publicUse) {
       this.originDraws = [];
       this.selectedDraw = null;
@@ -648,13 +699,22 @@ export default class sbBoard {
       this.existBrushObj = null;
       this.existAlogrithmObj = null;
     }
-    if (this.bgObj) {
-      clearSize = {
-        width: this.sbDom.width / this.bgObj.scaled,
-        height: this.sbDom.height / this.bgObj.scaled
-      };
+    let _width = this.sbDom.width
+    let _height = this.sbDom.height
+    if (this.bgObj && this.bgObj.success) {
+      _width = this.bgObj.width
+      _height = this.bgObj.height
     }
-    this.sbCtx.clearRect(-clearSize.width, -clearSize.height, clearSize.width * 3, clearSize.height * 3);
+    if (this.spliceBgList && this.spliceBgList.length) {
+      const _lastChild = this.spliceBgList[this.spliceBgList.length-1]
+      _width = _lastChild.offsetX + _lastChild.width
+      _height = _lastChild.offsetY + _lastChild.height
+    }
+    let clearSize = {
+      width: _width / this.zoomSize,
+      height: _height / this.zoomSize
+    };
+    this.sbCtx.clearRect(0, 0, clearSize.width, clearSize.height)
   }
   // 规范小数
   normalFloat(floatNumber = 0, fixed = 0) {
@@ -668,7 +728,14 @@ export default class sbBoard {
     }
     this.oldZoomSize = size;
     size = plus ? size + step : size - step;
-    const _min = Math.min(this.bgObj.scaled, 1);
+    let _originScaled = 1;
+    if (this.bgObj.scaled) {
+      _originScaled = this.bgObj.scaled
+    }
+    if (this.spliceBgList && this.spliceBgList.length) {
+      _originScaled = this.spliceBgList[this.spliceBgList.length-1].scaled
+    }
+    const _min = Math.min(_originScaled, 1);
     return Math.max(_min, Math.min(parseFloat(size.toFixed(3)), max));
   }
   // 转换至用户的笔刷图
@@ -750,11 +817,18 @@ export default class sbBoard {
   }
   // 计算缩放后拖拉后的差值
   calcZoomedDragoffsetDeltaSize(zoomin = true) {
-    if (!this.bgObj) {
-      return;
+    let _width = this.options.width;
+    let _height = this.options.height;
+    if (this.bgObj) {
+      _width = this.bgObj.width;
+      _height = this.bgObj.height;
     }
-    const _width = this.bgObj ? this.bgObj.width : this.options.width;
-    const _height = this.bgObj ? this.bgObj.height : this.options.height;
+    if (this.spliceBgList && this.spliceBgList.length) {
+      const _lastChild = this.spliceBgList[this.spliceBgList.length - 1]
+      _width = _lastChild.width + _lastChild.offsetX;
+      _height = _lastChild.height + _lastChild.offsetY;
+    }
+    
     let _deltaWidth = Math.abs(_width * this.zoomSize - _width * this.oldZoomSize) / 2;
     let _deltaHeight = Math.abs(_height * this.zoomSize - _height * this.oldZoomSize) / 2;
     let x = 0;
@@ -767,26 +841,27 @@ export default class sbBoard {
       y = this.dragOffset.y + _deltaHeight;
     }
     this.dragOffset = {
-      x,
-      y
+      x: Number(x.toFixed(2)),
+      y: Number(y.toFixed(2)),
     };
     return this.dragOffset;
   }
   // 还原缩放
   zoomReset() {
-    this.calcZoomedDragoffsetDeltaSize(false);
-    if (this.bgObj) {
+    // this.calcZoomedDragoffsetDeltaSize(false);
+    if (this.bgObj && this.bgObj.data) {
       this.dragOffset = {
         x: this.bgObj.offsetX,
         y: this.bgObj.offsetY
       };
+      this.zoomSize = this.bgObj.scaled;
     } else {
       this.dragOffset = {
         x: 0,
         y: 0
       };
+      this.zoomSize = this.spliceBgList && this.spliceBgList.length ? this.spliceBgList[this.spliceBgList.length-1].scaled : 1;
     }
-    this.zoomSize = this.bgObj ? this.bgObj.scaled : 1;
   }
   // 获取缩放倍数
   getZoomSize() {
@@ -943,238 +1018,6 @@ export default class sbBoard {
     //   this.selectedDraw = null;
     //   this.modifyRect = null;
     // }
-  }
-
-  // iocr矩形事件
-  iocrrectDownFn(e, options) {
-    // if (options.lockDraw) {
-    //   return;
-    // }
-    this.hoverPoint = {
-      x: e.offsetX,
-      y: e.offsetY
-    };
-    if (e.button === 0) {
-      if (this.pencilPressing) {
-        return;
-      }
-      this.pencilPressing = true;
-      this.setPencilPosition(this.hoverPoint.x, this.hoverPoint.y);
-      if (this.selectedDraw) {
-        this.selectedDraw['changed'] = false;
-        this.selectedDraw['moved'] = false;
-      }
-    } else if (e.button === 2) {
-      if (this.detectIsDBClick(e.timeStamp)) {
-        this.zoomReset();
-      } else {
-        document.documentElement.style.cursor = 'grabbing';
-        if (!this.draging) {
-          this.rightPressing = true;
-          this.pencilPressing = true;
-          this.draging = true;
-          this.dragDownPoint = {
-            x: e.offsetX - this.dragOffset.x,
-            y: e.offsetY - this.dragOffset.y
-          };
-          return;
-        }
-        
-        if (this.pencilPressing) {
-          return;
-        }
-        this.pencilPressing = true;
-        this.setPencilPosition(this.hoverPoint.x, this.hoverPoint.y);
-      }
-    }
-    this.sbDom.dispatchEvent(
-      new CustomEvent('iocrrectDown', {
-        bubbles: true,
-        detail: {
-          point: {
-            x: e.clientX,
-            y: e.clientY
-          }
-        }
-      })
-    );
-  }
-  iocrrectMoveFn(e, options) {
-    this.hoverPoint = {
-      x: e.offsetX,
-      y: e.offsetY
-    };
-    if (this.pencilPressing && this.draging) {
-      this.dragOffset['x'] = e.offsetX - this.dragDownPoint.x;
-      this.dragOffset['y'] = e.offsetY - this.dragDownPoint.y;
-      return;
-    }
-    if (!this.pencilPosition) {
-      // 没有点击移动的时候
-      if (this.selectedDraw && !this.selectedDraw.lock) {
-        this.selectedDraw = null;
-      }
-      const _onSomeOneRectFlag = this.calcIsOverDraws({
-        x: this.hoverPoint.x, 
-        y: this.hoverPoint.y, 
-        filterList:{ iocrrect: {is_stroke:false} }
-      });
-      // const _onSomeOneRectFlag = this.calcIsOverDraw(this.hoverPoint.x,this.hoverPoint.y, false);
-      
-      let _cursorStyle = _onSomeOneRectFlag ? 'move' : 'crosshair';
-      if (_onSomeOneRectFlag && _onSomeOneRectFlag.data ) {
-        if (_onSomeOneRectFlag.data.lock) {
-          _cursorStyle = 'pointer';
-        } else {
-          _cursorStyle = 'move'
-        }
-      } else {
-        if (options.lockDraw) {
-          _cursorStyle = 'pointer';
-        } else {
-          _cursorStyle = 'crosshair'
-        }
-      }
-      document.documentElement.style.cursor = _cursorStyle
-      
-      if (_onSomeOneRectFlag) {
-        if (!this.selectedDraw || (this.selectedDraw && !this.selectedDraw.data.lock) || (this.selectedDraw && this.selectedDraw.data.lock && (this.selectedDraw.data.id !== _onSomeOneRectFlag.data.id || (this.selectedDraw.data.id === _onSomeOneRectFlag.data.id && this.selectedDraw.pointIn !== _onSomeOneRectFlag.pointIn)))) {
-          this.selectedDraw = cloneDeep(_onSomeOneRectFlag);
-        }
-        
-        if (_onSomeOneRectFlag.data) {
-          this.tinkerUp = null;
-          for (let i = 0; i < this.controlDots.length; i++) {
-            const _dot = this.controlDots[i];
-            const _dotPath2d = this.drawModifyDot(_dot);
-            if (this.sbCtx.isPointInPath(_dotPath2d, this.hoverPoint.x, this.hoverPoint.y)) {
-              document.documentElement.style.cursor = _dot.cursor;
-              this.tinkerUp = { code: _dot.code };
-              break;
-            }
-          }
-        }
-      }
-    } else {
-      if (!this.pencilPressing || options.lockDraw) {
-        return;
-      }
-      
-      if (this.selectedDraw && !this.selectedDraw.data.lock) {
-        if (this.tinkerUp) {
-          // console.log('调整尺寸')
-          // 调整尺寸
-          if (this.selectedDraw.constructor === Object) {
-            this.selectedDraw['changed'] = true;
-            this.adjustSize(this.selectedDraw);
-          }
-        } else {
-          // 整体移动
-          if (this.selectedDraw.constructor === Object) {
-            this.selectedDraw['moved'] = true;
-            this.selectedDraw['changed'] = true;
-            this.drawPointsWholeMove(this.selectedDraw, this.hoverPoint.x, this.hoverPoint.y);
-          }
-        }
-      } else {
-        this.drawRect({x: this.hoverPoint.x, y:this.hoverPoint.y, label: options.label, strokeStyle:options.strokeStyle, fillStyle: options.fillStyle});
-      }
-    }
-    this.sbDom.dispatchEvent(
-      new CustomEvent('iocrrectMove', {
-        bubbles: true,
-        detail: {
-          point: {
-            x: e.clientX,
-            y: e.clientY
-          }
-        }
-      })
-    );
-  }
-  iocrrectUpFn(e, options) {
-    if (!this.pencilPressing) {
-      return;
-    }
-    this.hoverPoint = {
-      x: e.offsetX,
-      y: e.offsetY
-    };
-    if (this.pencilPressing && this.draging) {
-      this.dragOffset['x'] = e.offsetX - this.dragDownPoint.x;
-      this.dragOffset['y'] = e.offsetY - this.dragDownPoint.y;
-      this.draging = false;
-      this.pencilPressing = false;
-      this.sbDom.dispatchEvent(
-        new CustomEvent('iocrrectUp', {
-          bubbles: true,
-          detail: {
-            point: {
-              x: e.clientX,
-              y: e.clientY
-            }
-          }
-        })
-      );
-      return;
-    }
-
-    if (!options.lockDraw) { // 没有禁止画框
-      if (this.selectedDraw && !this.selectedDraw.data.lock) {
-        this.validateRect();
-        this.detectDrawsIsOverSize();
-        if (this.selectedDraw.changed && this.historyRecordHandler) {
-          this.historyRecordHandler.recordChange(this.getAllDraws());
-        }
-      } else {
-        let someOneRect = this.drawRect({x:this.hoverPoint.x, y:this.hoverPoint.y, label:options.label, strokeStyle:options.strokeStyle, fillStyle: options.fillStyle, drawType: 'iocrrect'});
-        const _dx = someOneRect.x + someOneRect.width;
-        if (someOneRect.x > _dx) {
-          someOneRect.x = _dx;
-        }
-        const _dy = someOneRect.y + someOneRect.height;
-        if (someOneRect.y > _dy) {
-          someOneRect.y = _dy;
-        }
-        someOneRect['width'] = Math.abs(someOneRect.width);
-        someOneRect['height'] = Math.abs(someOneRect.height);
-        someOneRect = this.detectIsOverBgSize(someOneRect)
-        this.tmpRect = null;
-        const _minSize = 5 / this.zoomSize;
-        if (someOneRect.width > _minSize && someOneRect.height > _minSize) {
-          // 记录已经画的rects
-          someOneRect['id'] = this.specifyDrawId ? this.specifyDrawId : this.uuidv4Short();
-          this.specifyDrawId = null;
-          this.originDraws.push(someOneRect);
-          this.detectDrawsIsOverSize();
-          this.selectedDraw = cloneDeep({
-            data: this.originDraws[this.originDraws.length - 1],
-            index: this.originDraws.length - 1,
-            newadd: true
-          });
-          // 是否需要记录操作
-          if (this.selectedDraw.data.label && this.historyRecordHandler) {
-            this.historyRecordHandler.recordChange(this.getAllDraws());
-          }
-        }
-      }
-    }
-
-    this.pencilPressing = false;
-    this.pencilPosition = null;
-
-    this.sbDom.dispatchEvent(
-      new CustomEvent('iocrrectUp', {
-        bubbles: true,
-        detail: {
-          draw: this.selectedDraw,
-          point: {
-            x: e.clientX,
-            y: e.clientY
-          }
-        }
-      })
-    );
   }
 
   // 修正翻转调整后的坐标错误偏差
@@ -1500,7 +1343,10 @@ export default class sbBoard {
     );
   }
   // 矩形Draw事件
-  rectDownFn(e) {
+  rectDownFn(e, options) {
+    // if (options.lockDraw) {
+    //   return;
+    // }
     this.hoverPoint = {
       x: e.offsetX,
       y: e.offsetY
@@ -1511,19 +1357,137 @@ export default class sbBoard {
       }
       this.pencilPressing = true;
       this.setPencilPosition(this.hoverPoint.x, this.hoverPoint.y);
+      if (this.selectedDraw) {
+        this.selectedDraw['changed'] = false;
+        this.selectedDraw['moved'] = false;
+      }
+    } else if (e.button === 2) {
+      if (this.detectIsDBClick(e.timeStamp)) {
+        this.zoomReset();
+      } else {
+        document.documentElement.style.cursor = 'grabbing';
+        if (!this.draging) {
+          this.rightPressing = true;
+          this.pencilPressing = true;
+          this.draging = true;
+          this.dragDownPoint = {
+            x: e.offsetX - this.dragOffset.x,
+            y: e.offsetY - this.dragOffset.y
+          };
+          return;
+        }
+        
+        if (this.pencilPressing) {
+          return;
+        }
+        this.pencilPressing = true;
+        this.setPencilPosition(this.hoverPoint.x, this.hoverPoint.y);
+      }
     }
+    this.sbDom.dispatchEvent(
+      new CustomEvent('iocrrectDown', {
+        bubbles: true,
+        detail: {
+          point: {
+            x: e.clientX,
+            y: e.clientY
+          }
+        }
+      })
+    );
   }
   rectMoveFn(e, options) {
-    document.documentElement.style.cursor = 'crosshair';
-    if (!this.pencilPressing) {
-      return;
-    }
     this.hoverPoint = {
       x: e.offsetX,
       y: e.offsetY
     };
-    this.shouldRecord = true;
-    this.drawRect({x:this.hoverPoint.x, y:this.hoverPoint.y, label:options.label, strokeStyle:options.strokeStyle});
+    if (this.pencilPressing && this.draging) {
+      this.dragOffset['x'] = e.offsetX - this.dragDownPoint.x;
+      this.dragOffset['y'] = e.offsetY - this.dragDownPoint.y;
+      return;
+    }
+    if (!this.pencilPosition) {
+      // 没有点击移动的时候
+      if (this.selectedDraw && !this.selectedDraw.lock) {
+        this.selectedDraw = null;
+      }
+      const _onSomeOneRectFlag = this.calcIsOverDraws({
+        x: this.hoverPoint.x, 
+        y: this.hoverPoint.y, 
+        filterList:{ iocrrect: {is_stroke:false} }
+      });
+      // const _onSomeOneRectFlag = this.calcIsOverDraw(this.hoverPoint.x,this.hoverPoint.y, false);
+      
+      let _cursorStyle = _onSomeOneRectFlag ? 'move' : 'crosshair';
+      if (_onSomeOneRectFlag && _onSomeOneRectFlag.data ) {
+        if (_onSomeOneRectFlag.data.lock) {
+          _cursorStyle = 'pointer';
+        } else {
+          _cursorStyle = 'move'
+        }
+      } else {
+        if (options.lockDraw) {
+          _cursorStyle = 'pointer';
+        } else {
+          _cursorStyle = 'crosshair'
+        }
+      }
+      document.documentElement.style.cursor = _cursorStyle
+      
+      if (_onSomeOneRectFlag) {
+        if (!this.selectedDraw || (this.selectedDraw && !this.selectedDraw.data.lock) || (this.selectedDraw && this.selectedDraw.data.lock && (this.selectedDraw.data.id !== _onSomeOneRectFlag.data.id || (this.selectedDraw.data.id === _onSomeOneRectFlag.data.id && this.selectedDraw.pointIn !== _onSomeOneRectFlag.pointIn)))) {
+          this.selectedDraw = cloneDeep(_onSomeOneRectFlag);
+        }
+        
+        if (_onSomeOneRectFlag.data) {
+          this.tinkerUp = null;
+          for (let i = 0; i < this.controlDots.length; i++) {
+            const _dot = this.controlDots[i];
+            const _dotPath2d = this.drawModifyDot(_dot);
+            if (this.sbCtx.isPointInPath(_dotPath2d, this.hoverPoint.x, this.hoverPoint.y)) {
+              document.documentElement.style.cursor = _dot.cursor;
+              this.tinkerUp = { code: _dot.code };
+              break;
+            }
+          }
+        }
+      }
+    } else {
+      if (!this.pencilPressing || options.lockDraw) {
+        return;
+      }
+      
+      if (this.selectedDraw && !this.selectedDraw.data.lock) {
+        if (this.tinkerUp) {
+          // console.log('调整尺寸')
+          // 调整尺寸
+          if (this.selectedDraw.constructor === Object) {
+            this.selectedDraw['changed'] = true;
+            this.adjustSize(this.selectedDraw);
+          }
+        } else {
+          // 整体移动
+          if (this.selectedDraw.constructor === Object) {
+            this.selectedDraw['moved'] = true;
+            this.selectedDraw['changed'] = true;
+            this.drawPointsWholeMove(this.selectedDraw, this.hoverPoint.x, this.hoverPoint.y);
+          }
+        }
+      } else {
+        this.drawRect({x: this.hoverPoint.x, y:this.hoverPoint.y, label: options.label, strokeStyle:options.strokeStyle, fillStyle: options.fillStyle});
+      }
+    }
+    this.sbDom.dispatchEvent(
+      new CustomEvent('iocrrectMove', {
+        bubbles: true,
+        detail: {
+          point: {
+            x: e.clientX,
+            y: e.clientY
+          }
+        }
+      })
+    );
   }
   rectUpFn(e, options) {
     if (!this.pencilPressing) {
@@ -1533,44 +1497,71 @@ export default class sbBoard {
       x: e.offsetX,
       y: e.offsetY
     };
+    if (this.pencilPressing && this.draging) {
+      this.dragOffset['x'] = e.offsetX - this.dragDownPoint.x;
+      this.dragOffset['y'] = e.offsetY - this.dragDownPoint.y;
+      this.draging = false;
+      this.pencilPressing = false;
+      this.sbDom.dispatchEvent(
+        new CustomEvent('iocrrectUp', {
+          bubbles: true,
+          detail: {
+            point: {
+              x: e.clientX,
+              y: e.clientY
+            }
+          }
+        })
+      );
+      return;
+    }
+
+    if (!options.lockDraw) { // 没有禁止画框
+      if (this.selectedDraw && !this.selectedDraw.data.lock) {
+        this.validateRect();
+        this.detectDrawsIsOverSize();
+        if (this.selectedDraw.changed && this.historyRecordHandler) {
+          this.historyRecordHandler.recordChange(this.getAllDraws());
+        }
+      } else {
+        let someOneRect = this.drawRect({x:this.hoverPoint.x, y:this.hoverPoint.y, label:options.label, strokeStyle:options.strokeStyle, fillStyle: options.fillStyle, drawType: 'iocrrect'});
+        const _dx = someOneRect.x + someOneRect.width;
+        if (someOneRect.x > _dx) {
+          someOneRect.x = _dx;
+        }
+        const _dy = someOneRect.y + someOneRect.height;
+        if (someOneRect.y > _dy) {
+          someOneRect.y = _dy;
+        }
+        someOneRect['width'] = Math.abs(someOneRect.width);
+        someOneRect['height'] = Math.abs(someOneRect.height);
+        someOneRect = this.detectIsOverBgSize(someOneRect)
+        this.tmpRect = null;
+        const _minSize = 5 / this.zoomSize;
+        if (someOneRect.width > _minSize && someOneRect.height > _minSize) {
+          // 记录已经画的rects
+          someOneRect['id'] = this.specifyDrawId ? this.specifyDrawId : this.uuidv4Short();
+          this.specifyDrawId = null;
+          this.originDraws.push(someOneRect);
+          this.detectDrawsIsOverSize();
+          this.selectedDraw = cloneDeep({
+            data: this.originDraws[this.originDraws.length - 1],
+            index: this.originDraws.length - 1,
+            newadd: true
+          });
+          // 是否需要记录操作
+          if (this.selectedDraw.data.label && this.historyRecordHandler) {
+            this.historyRecordHandler.recordChange(this.getAllDraws());
+          }
+        }
+      }
+    }
+
     this.pencilPressing = false;
-    let someOneRect = this.drawRect({x:this.hoverPoint.x, y:this.hoverPoint.y, label:options.label, strokeStyle:options.strokeStyle});
-
-    const _dx = someOneRect.x + someOneRect.width;
-    if (someOneRect.x > _dx) {
-      someOneRect.x = _dx;
-    }
-    const _dy = someOneRect.y + someOneRect.height;
-    if (someOneRect.y > _dy) {
-      someOneRect.y = _dy;
-    }
-    someOneRect['width'] = Math.abs(someOneRect.width);
-    someOneRect['height'] = Math.abs(someOneRect.height);
-
-    const _minSize = 20 / this.zoomSize;
-    if ((someOneRect.width > _minSize || someOneRect.height > _minSize) && someOneRect.width <= this.bgObj.width && someOneRect.height <= this.bgObj.height) {
-      // 记录已经画的rects
-      someOneRect['id'] = this.specifyDrawId ? this.specifyDrawId : this.uuidv4Short();
-      this.specifyDrawId = null;
-      this.originDraws.push(someOneRect);
-      this.detectDrawsIsOverSize();
-      this.selectedDraw = cloneDeep({
-        data: this.originDraws[this.originDraws.length - 1],
-        index: this.originDraws.length - 1
-      });
-      if (this.historyRecordHandler && this.options.recordWithLabel && this.selectedDraw.data.label) {
-        this.historyRecordHandler.recordChange(this.getAllDraws());
-      }
-      if (!this.options.recordWithLabel && this.historyRecordHandler) {
-        this.historyRecordHandler.recordChange(this.getAllDraws());
-      }
-    }
-    this.setDrawType('pointer', false);
     this.pencilPosition = null;
-    this.tmpRect = null;
 
     this.sbDom.dispatchEvent(
-      new CustomEvent('rectUp', {
+      new CustomEvent('iocrrectUp', {
         bubbles: true,
         detail: {
           draw: this.selectedDraw,
@@ -2293,13 +2284,25 @@ export default class sbBoard {
       }
     }
     // this.scrollbarSystem()
-
-    // 设置背景图
+    // 渲染拼接图
+    this.renderSpliceBackground(this.sbCtx)
+    // 渲染背景图
     this.renderBackground(this.sbCtx);
     this.renderCursor(this.sbCtx);
     window.requestAnimationFrame(() => this.renderBoard());
   }
-  // 设置背景图
+  // 渲染拼接图
+  renderSpliceBackground(ctx) {
+    if (this.spliceBgList && this.spliceBgList.length) {
+      this.spliceBgList.forEach(val => {
+        ctx.globalCompositeOperation = 'destination-over';
+        if (val.success && val.data) {
+          ctx.drawImage(val.data, val.offsetX, val.offsetY);
+        }
+      })
+    }
+  }
+  // 渲染背景图
   renderBackground(ctx) {
     if (this.bgObj) {
       ctx.globalCompositeOperation = 'destination-over';
@@ -2340,106 +2343,154 @@ export default class sbBoard {
       options
     );
     return new Promise(resolve => {
-      const _canvas = document.createElement('canvas');
-      const _width = this.bgObj ? this.bgObj.width : this.sbDom.width;
-      const _height = this.bgObj ? this.bgObj.height : this.sbDom.height;
-      _canvas.width = _width;
-      _canvas.height = _height;
-      const _canvasCtx = _canvas.getContext('2d');
-      
-      if (this.existBrushObj && this.existBrushObj.success && _options.type !== 'origin') {
-        _canvasCtx.drawImage(this.existBrushObj.data, 0, 0);
-      }
-      if (_options.type === 'draws' || _options.type === 'fusion') {
+      try {
+        const _canvas = document.createElement('canvas');
+        const _width = this.bgObj ? this.bgObj.width : this.sbDom.width;
+        const _height = this.bgObj ? this.bgObj.height : this.sbDom.height;
+        _canvas.width = _width;
+        _canvas.height = _height;
+        const _canvasCtx = _canvas.getContext('2d');
         
-        this.originDraws.forEach(val => {
-          switch (val.type) {
-            case 'rect':
-              _canvasCtx.strokeStyle = val.strokeStyle ? val.strokeStyle : this.options.pencilStyle.strokeStyle;
-              _canvasCtx.lineWidth = val.lineWidth ? val.lineWidth : this.options.pencilStyle.lineWidth;
-              _canvasCtx.strokeRect(val.x, val.y, val.width, val.height);
-              if (val.label) {
-                this.labelRect(val, this.zoomSize, _canvasCtx);
-              }
-              break;
-            case 'eraser':
-              _canvasCtx.globalCompositeOperation = 'destination-out';
-              _canvasCtx.lineCap = 'square';
-              _canvasCtx.lineJoin = 'miter';
-              _canvasCtx.strokeStyle = '#fff';
-              _canvasCtx.lineWidth = val.lineWidth;
-              _canvasCtx.stroke(val.path);
-              _canvasCtx.globalCompositeOperation = 'source-over';
-              break;
-            case 'brush':
-              _canvasCtx.globalCompositeOperation = 'xor';
-              _canvasCtx.lineWidth = val.lineWidth;
-              _canvasCtx.lineCap = 'square';
-              _canvasCtx.lineJoin = 'miter';
-              _canvasCtx.strokeStyle = val.strokeStyle;
-              _canvasCtx.stroke(val.path);
-              break;
-            case 'polygon':
-              if (val.drawType === 'polygonClip') {
-                this.setPencilStyle({
-                  ctx:_canvasCtx,
-                  fillStyle: 'black',
-                  gco: 'source-over'
-                });
-                _canvasCtx.fillRect(0, 0, this.bgObj.width, this.bgObj.height);
-                this.setPencilStyle({
-                  ctx:_canvasCtx,
-                  gco: 'destination-out'
-                });
-                _canvasCtx.beginPath();
-                _canvasCtx.moveTo(val.x, val.y);
-                val.ways.forEach(wval => {
-                  _canvasCtx.lineTo(wval.x, wval.y);
-                });
-                _canvasCtx.closePath();
-                _canvasCtx.fill();
-              } else {
-                _canvasCtx.globalCompositeOperation = val.gco ? val.gco : 'source-over';
-                _canvasCtx.beginPath();
-                _canvasCtx.moveTo(val.x, val.y);
-                val.ways.forEach(wval => {
-                  _canvasCtx.lineTo(wval.x, wval.y);
-                });
-                _canvasCtx.closePath();
+        if (this.existBrushObj && this.existBrushObj.success && _options.type !== 'origin') {
+          _canvasCtx.drawImage(this.existBrushObj.data, 0, 0);
+        }
+        
+        if (_options.type === 'draws' || _options.type === 'fusion') {
+          
+          this.originDraws.forEach(val => {
+            switch (val.type) {
+              case 'rect':
+                _canvasCtx.strokeStyle = val.strokeStyle ? val.strokeStyle : this.options.pencilStyle.strokeStyle;
+                _canvasCtx.lineWidth = val.lineWidth ? val.lineWidth : this.options.pencilStyle.lineWidth;
+                _canvasCtx.strokeRect(val.x, val.y, val.width, val.height);
+                if (val.label) {
+                  this.labelRect(val, this.zoomSize, _canvasCtx);
+                }
+                break;
+              case 'eraser':
+                _canvasCtx.globalCompositeOperation = 'destination-out';
+                _canvasCtx.lineCap = 'square';
+                _canvasCtx.lineJoin = 'miter';
+                _canvasCtx.strokeStyle = '#fff';
                 _canvasCtx.lineWidth = val.lineWidth;
-                if (val.fillStyle) {
-                  _canvasCtx.fillStyle = val.fillStyle;
+                _canvasCtx.stroke(val.path);
+                _canvasCtx.globalCompositeOperation = 'source-over';
+                break;
+              case 'brush':
+                _canvasCtx.globalCompositeOperation = 'xor';
+                _canvasCtx.lineWidth = val.lineWidth;
+                _canvasCtx.lineCap = 'square';
+                _canvasCtx.lineJoin = 'miter';
+                _canvasCtx.strokeStyle = val.strokeStyle;
+                _canvasCtx.stroke(val.path);
+                break;
+              case 'polygon':
+                if (val.drawType === 'polygonClip') {
+                  this.setPencilStyle({
+                    ctx:_canvasCtx,
+                    fillStyle: 'black',
+                    gco: 'source-over'
+                  });
+                  _canvasCtx.fillRect(0, 0, this.bgObj.width, this.bgObj.height);
+                  this.setPencilStyle({
+                    ctx:_canvasCtx,
+                    gco: 'destination-out'
+                  });
+                  _canvasCtx.beginPath();
+                  _canvasCtx.moveTo(val.x, val.y);
+                  val.ways.forEach(wval => {
+                    _canvasCtx.lineTo(wval.x, wval.y);
+                  });
+                  _canvasCtx.closePath();
                   _canvasCtx.fill();
                 } else {
-                  _canvasCtx.strokeStyle = val.strokeStyle;
-                  _canvasCtx.stroke();
+                  _canvasCtx.globalCompositeOperation = val.gco ? val.gco : 'source-over';
+                  _canvasCtx.beginPath();
+                  _canvasCtx.moveTo(val.x, val.y);
+                  val.ways.forEach(wval => {
+                    _canvasCtx.lineTo(wval.x, wval.y);
+                  });
+                  _canvasCtx.closePath();
+                  _canvasCtx.lineWidth = val.lineWidth;
+                  if (val.fillStyle) {
+                    _canvasCtx.fillStyle = val.fillStyle;
+                    _canvasCtx.fill();
+                  } else {
+                    _canvasCtx.strokeStyle = val.strokeStyle;
+                    _canvasCtx.stroke();
+                  }
                 }
-              }
-              
-              break;
+                
+                break;
+            }
+          });
+        }
+        if (_options.type === 'splice' && this.spliceBgList && this.spliceBgList.length) {
+          const _lastChild = this.spliceBgList[this.spliceBgList.length - 1]
+          const _finalWidth = _lastChild.offsetX + _lastChild.width;
+          const _finalHeight = _lastChild.offsetY+_lastChild.height;
+          const _zoomSize = _options.zoomSize ? _options.zoomSize : 0.5
+          _canvas.width = _finalWidth*_zoomSize
+          _canvas.height = _finalHeight*_zoomSize
+          _canvasCtx.setTransform(1, 0, 0, 1, 0, 0);
+          _canvasCtx.scale(_zoomSize, _zoomSize);
+          _canvasCtx.translate(0, 0);
+          this.spliceBgList.forEach(val => {
+            _canvasCtx.globalCompositeOperation = 'destination-over';
+            if (val.success && val.data) {
+              _canvasCtx.drawImage(val.data, val.offsetX, val.offsetY);
+            }
+          })
+          _canvas.toBlob((blob) => {
+            if (blob) {
+              resolve({
+                success: true,
+                data: this.blobToFile(blob, _options.file.name, _options.file.options),
+                message: 'export pic file success'
+              });
+            } else {
+              resolve({
+                success: false,
+                data: null,
+                message: 'export pic file failure [oversize]'
+              });
+            }
+          });
+        }
+        if (_options.type === 'origin' || _options.type === 'fusion') {
+          // 导出只有底图的图片
+          if (this.bgObj) {
+            _canvasCtx.globalCompositeOperation = 'destination-over';
+            if (this.bgObj.data) {
+              _canvasCtx.drawImage(this.bgObj.data, 0, 0, _width, _height);
+            } else {
+              _canvasCtx.fillStyle = this.bgObj.fillStyle;
+              _canvasCtx.fillRect(0, 0, this.bgObj.width, this.bgObj.height);
+            }
           }
-        });
-      }
-
-      if (_options.type === 'origin' || _options.type === 'fusion') {
-        // 导出只有底图的图片
-        if (this.bgObj) {
-          _canvasCtx.globalCompositeOperation = 'destination-over';
-          if (this.bgObj.data) {
-            _canvasCtx.drawImage(this.bgObj.data, 0, 0, _width, _height);
-          } else {
-            _canvasCtx.fillStyle = this.bgObj.fillStyle;
-            _canvasCtx.fillRect(0, 0, this.bgObj.width, this.bgObj.height);
+          if (_img) {
+            if (_options.file) {
+              _canvas.toBlob((blob) => {
+                resolve({
+                  success: true,
+                  data: this.blobToFile(blob, _options.file.name, _options.file.options),
+                  message: 'export pic file success'
+                })
+              });
+            }
+            return resolve({
+              success: true,
+              data: _img,
+              message: 'export base64 pic success'
+            });
           }
         }
-      }
-      
-      const _img = _canvas.toDataURL('image/png', _options.quality);
-      if (_img) {
-        if (_options.file) {
-          return resolve(this.blobToFile(this.b64toBlob(_img), _options.file.name, _options.file.options));
-        }
-        return resolve(_img);
+      } catch(err) {
+        resolve({
+          success: false,
+          data: err,
+          message: 'export pic error'
+        })
       }
     });
   }
@@ -2601,7 +2652,7 @@ export default class sbBoard {
     if (keycode === 27) {
       // esc
       this.selectedDraw = null;
-      if (['polygonClip', 'tycrect'].includes(this.drawType)) {
+      if (['polygonClip'].includes(this.drawType)) {
         this.tmpPolygon = null;
         this.pencilPosition = null;
         return;
@@ -2755,38 +2806,73 @@ export default class sbBoard {
   }
   // 侦测draw组是否超出底图范围
   detectDrawsIsOverSize() {
-    if (!this.bgObj) {
-      return false;
-    }
-    let _flag = true;
-    this.originDraws.forEach((oval, oindex) => {
-      switch (oval.type) {
-        case 'rect':
-          // 右尽头
-          if (oval.x + oval.width > this.bgObj.width) {
-            const _delta = Math.abs(this.bgObj.width - oval.width);
-            oval['x'] = _delta;
-          }
-          // 下尽头
-          if (oval.y + oval.height > this.bgObj.height) {
-            const _delta = Math.abs(this.bgObj.height - oval.height);
-            oval['y'] = _delta;
-          }
-          // 上尽头
-          if (oval.x < 0) {
-            oval['x'] = 0;
-          }
-          // 左尽头
-          if (oval.y < 0) {
-            oval['y'] = 0;
-          }
-          break;
+    if (this.spliceBgList && this.spliceBgList.length) {
+      const _lastChild = this.spliceBgList[this.spliceBgList.length - 1]
+      const _finalWidth = _lastChild.offsetX + _lastChild.width;
+      const _finalHeight = _lastChild.offsetY + _lastChild.height;
+      let _flag = true;
+      this.originDraws.forEach((oval, oindex) => {
+        switch (oval.type) {
+          case 'rect':
+            // 右尽头
+            if (oval.x + oval.width > _finalWidth) {
+              const _delta = Math.abs(_finalWidth - oval.width);
+              oval['x'] = _delta;
+            }
+            // 下尽头
+            if (oval.y + oval.height > _finalHeight) {
+              const _delta = Math.abs(_finalHeight - oval.height);
+              oval['y'] = _delta;
+            }
+            // 上尽头
+            if (oval.x < 0) {
+              oval['x'] = 0;
+            }
+            // 左尽头
+            if (oval.y < 0) {
+              oval['y'] = 0;
+            }
+            break;
+        }
+      });
+      if (_flag) {
+        this.renewSelectedDraw();
       }
-    });
-    if (_flag) {
-      this.renewSelectedDraw();
+      return _flag;
+    } else {
+      if (!this.bgObj) {
+        return false;
+      }
+      let _flag = true;
+      this.originDraws.forEach((oval, oindex) => {
+        switch (oval.type) {
+          case 'rect':
+            // 右尽头
+            if (oval.x + oval.width > this.bgObj.width) {
+              const _delta = Math.abs(this.bgObj.width - oval.width);
+              oval['x'] = _delta;
+            }
+            // 下尽头
+            if (oval.y + oval.height > this.bgObj.height) {
+              const _delta = Math.abs(this.bgObj.height - oval.height);
+              oval['y'] = _delta;
+            }
+            // 上尽头
+            if (oval.x < 0) {
+              oval['x'] = 0;
+            }
+            // 左尽头
+            if (oval.y < 0) {
+              oval['y'] = 0;
+            }
+            break;
+        }
+      });
+      if (_flag) {
+        this.renewSelectedDraw();
+      }
+      return _flag;
     }
-    return _flag;
   }
   // 文件转base64
   fileToBase64(file) {
