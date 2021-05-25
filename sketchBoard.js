@@ -54,7 +54,7 @@ export default class sketchBoard {
     this.existAlogrithmObj = null; // 已有算法特定图
     this.pencilPosition = null;
     this.btnScaleStep = 0.4;
-    this.drawType = 'pointer'; // rect, polygon, brush, eraser, magnifier
+    this.drawType = 'pointer'; // rect, polygon, brush, eraser, magnifier, arc
     this.tmpPolygon = null; // 存放临时 polygon 对象用
     this.zoomSize = 1;
     this.oldZoomSize = 1;
@@ -89,6 +89,7 @@ export default class sketchBoard {
     this.resizing = false;
     this.sbDomKeydownFn = null;
     this.sbDomKeyupFn = null;
+    this.sbDomWheelFn = null;
     this.magnifierDom = null; // 放大镜容器 
     this.preventDelete = false; // 是否阻止快捷键删除
     this.spliceBgList = []; // 拼接图片临时数组
@@ -157,10 +158,11 @@ export default class sketchBoard {
 
     this.sbDomKeydownFn = e => this.sbDomKeydown(e);
     this.sbDomKeyupFn = e => this.sbDomKeyup(e);
+    this.sbDomWheelFn = e => this.sbDomWheel(e)
 
     this.bindGlobalKeyboard();
 
-    this.sbDom.addEventListener('wheel', e => this.sbDomWheel(e), false);
+    this.sbDom.addEventListener('wheel', this.sbDomWheelFn, false);
     this.sbDom.oncontextmenu = e => {
       e.preventDefault();
     };
@@ -427,36 +429,83 @@ export default class sketchBoard {
     this.selectedDraw = null;
     this.isObserver = isObserver;
   }
-
+  // 清空背景列表数据
+  clearBgList() {
+    this.spliceBgList = []
+  }
+  // 获取spliceBgList总尺寸大小
+  getSpliceBgListTotalSize(type="height") {
+    let _totalWidth = 0;
+    let _totalHeight = 0;
+    if (this.spliceBgList && this.spliceBgList.length) {
+      this.spliceBgList.forEach(val => {
+        if (type === 'height') {
+          _totalHeight = _totalHeight + Math.floor(val.height*this.zoomSize)
+        }
+        if (type === 'width') {
+          _totalWdith = _totalWdith + Math.floor(val.width*this.zoomSize)
+        }
+      })
+    }
+    return {
+      totalWidth: _totalWidth,
+      totalHeight: _totalHeight
+    }
+  }
+  // 撤销wheel监听
+  revokeWheel() {
+    this.sbDom.removeEventListener('wheel', this.sbDomWheelFn, false);
+  }
   // 拼接背景图
   async spliceBackground(obj={}){
     return new Promise(async resolve=>{
       const _obj = Object.assign({
         offsetX: 0,
         offsetY: 0,
-        src: ''
+        src: '',
+        reverse: false,
       }, obj)
       if (_obj.src) {
         let _bgSection = await this.asyncLoadImage(_obj.src);
-        _bgSection = Object.assign(_bgSection, {
-          offsetX: _obj.offsetX,
-          offsetY: _obj.offsetY,
-        })
         if (_bgSection.success) {
-          this.spliceBgList.push(_bgSection)
-          let prevScaled = 1
-          if (this.spliceBgList.length>0) {
-            prevScaled = this.spliceBgList[this.spliceBgList.length-1].scaled
+          if (_obj.reverse) {
+            // 倒序插入
+            this.spliceBgList.unshift(_bgSection)
+            this.spliceBgList[0].offsetX = 0;
+            this.spliceBgList[0].offsetY = 0;
+            if(this.spliceBgList.length) {
+              for(let i=1;i<this.spliceBgList.length;i++) {
+                const _prevItem = this.spliceBgList[i-1];
+                this.spliceBgList[i].offsetY = _prevItem.height+_prevItem.offsetY
+              }
+            }
+            let prevScaled = 1
+            if (this.spliceBgList.length) {
+              prevScaled = this.spliceBgList[0].scaled
+            }
+            this.zoomSize = Math.min(prevScaled, _bgSection.scaled);
+            this.options.pencilStyle.lineWidth = 1/this.zoomSize*2.5
+            this.options.adjustDotStyle.lineWidth = 1/this.zoomSize*3
+          } else {
+            // 顺序插入
+            _bgSection = Object.assign(_bgSection, {
+              offsetX: _obj.offsetX,
+              offsetY: _obj.offsetY,
+            })
+            this.spliceBgList.push(_bgSection)
+            let prevScaled = 1
+            if (this.spliceBgList.length>0) {
+              prevScaled = this.spliceBgList[this.spliceBgList.length-1].scaled
+            }
+            this.zoomSize = Math.min(prevScaled, _bgSection.scaled);
+            this.options.pencilStyle.lineWidth = 1/this.zoomSize*2.5
+            this.options.adjustDotStyle.lineWidth = 1/this.zoomSize*3
           }
-          this.zoomSize = Math.min(prevScaled, _bgSection.scaled);
-          this.options.pencilStyle.lineWidth = 1/this.zoomSize*2.5
-          this.options.adjustDotStyle.lineWidth = 1/this.zoomSize*3
         }
         resolve()
       } else {
         resolve()
       }
-      
     })
   }
   removeSpliceBackground() {
@@ -2114,6 +2163,24 @@ export default class sketchBoard {
   renderSingleOriginDraws(ctx, val) {
     ctx.setLineDash([0]);
     switch (val.type) {
+      case 'arc':
+        this.setPencilStyle({
+          ctx,
+          strokeStyle: val.strokeStyle,
+          lineWidth: val.lineWidth,
+          fillStyle: val.fillStyle,
+          gco: 'source-over'
+        })
+        ctx.beginPath();
+        ctx.arc(val.x, val.y, val.radius||3, val.startAngle||0, val.endAngle||2*Math.PI, val.anticlockwise||false);
+        if (val.fillStyle) {
+          ctx.fillRect()
+        }
+        ctx.stroke()
+        if (val.label) {
+          this.labelRect(val, this.zoomSize);
+        }
+        break;
       case 'rect':
         this.setPencilStyle({
           ctx,
@@ -2498,7 +2565,7 @@ export default class sketchBoard {
   sbDomWheel(e) {
     const _wheelDelta = e.wheelDelta;
     // console.log(`this.ctrlKey: ${this.ctrlKey}, this.altKey: ${this.altKey}`)
-    if ((this.ctrlKey || this.altKey) && Math.abs(_wheelDelta) > 0) {
+    if ((e.ctrlKey || e.altKey) && Math.abs(_wheelDelta) > 0) {
       if (_wheelDelta > 0) {
         this.zoomIn(0.02);
       } else {

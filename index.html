@@ -24,6 +24,7 @@
         }
         .sketch-board-wrap {
             display: grid;
+            overflow: auto;
             /* width: 800px;
             height: 800px; */
             background-color: rgb(218, 231, 255);
@@ -39,6 +40,8 @@
         <div id="sketchBoardWrap" class="sketch-board-wrap"></div>
         <div id="addonWrap">
             <button id="exportPic">export</button>
+            <button id="resetSplitBg">resetSplitBg</button>
+            <button id="reloadSpliceBgs">reloadSpliceBgs</button>
             <div id="message"></div>
         </div>
     </div>
@@ -48,27 +51,64 @@
         const _sketchBoardWrap = document.getElementById('sketchBoardWrap')
         const _previewImg = document.getElementById('previewImg')
         const _exportPic = document.getElementById('exportPic')
+        const _resetSplitBg = document.getElementById('resetSplitBg')
+        const _reloadSpliceBgs = document.getElementById('reloadSpliceBgs')
         const _message = document.getElementById('message')
         const _addonWrap = document.getElementById('addonWrap')
         const _sketchBoardIns = new sketchBoard({
             wrap: _sketchBoardWrap
         })
         _sketchBoardWrap.appendChild(_sketchBoardIns.getWrapDom())
-        _sketchBoardIns.setDrawType('rect')
+        // _sketchBoardIns.setDrawType('rect')
+        // _sketchBoardIns.setDrawsData([
+        //     {
+        //         type:'arc',
+        //         radius: 400,
+        //         x: 404,
+        //         y: 404,
+        //         strokeStyle: 'red'
+        //     }
+        // ])
         // _sketchBoardIns.setBackground({
         //     src: `./groupPics/3.jpg`,
         // })
         
         async function loadPlicBackground() {
-            let spliceIndex = 39;
-            const totalNums = 39
-            while(spliceIndex >= 0) {
+            let spliceIndex = 1;
+            let _totalHeight = 0
+            const _draws = [
+                    {
+                        type:'rect',
+                        x: 404,
+                        y: 404,
+                        width: 500,
+                        height: 345,
+                        strokeStyle: 'red',
+                        lineWidth: 7
+                    }
+                ]
+            while(spliceIndex <= 16) {
+                // console.log(spliceIndex)
+                // const _offsetY = 1002*(spliceIndex-1);
+                // console.log(_offsetY)
+                
+                // let _totalWdith = 0
                 await _sketchBoardIns.spliceBackground({
-                    src: `./groupPics/${spliceIndex}.jpg`,
-                    offsetY: 1002*(totalNums-spliceIndex)
+                    src: `./1621907062361/${spliceIndex}.jpg`,
+                    // offsetY: _offsetY,
+                    reverse: true,
                 })
-                spliceIndex = spliceIndex - 1
+                spliceIndex = spliceIndex + 1
             }
+            const _result = _sketchBoardIns.getSpliceBgListTotalSize()
+            _sketchBoardIns.setDrawsData(_draws)
+            // console.log(_result)
+            // console.dir(_sketchBoardIns.getCanvasDom())
+            // console.log(_totalHeight)
+            _sketchBoardIns.revokeWheel()
+            // _sketchBoardIns.getCanvasDom().style.height = `${_result.totalHeight}px`
+            // _sketchBoardIns.getCanvasDom().height = _result.totalHeight
+            _sketchBoardIns.getWrapDom().style.height = `${_result.totalHeight}px`
         }
         function downloadFile(data, fileName, type="text/plain") {
             // Create an invisible A element
@@ -90,6 +130,12 @@
             document.body.removeChild(a);
         }
         loadPlicBackground()
+        _resetSplitBg.addEventListener('click', ()=>{
+            _sketchBoardIns.clearBgList()
+        })
+        _reloadSpliceBgs.addEventListener('click', ()=>{
+            loadPlicBackground()
+        })
         _exportPic.addEventListener('click', ()=>{
             _message.innerHTML = 'loading...'
             setTimeout(()=> {
@@ -114,8 +160,6 @@
                     // _addonWrap.appendChild(newImg);
                 })
             }, 1000)
-            
-            
         })
     </script>
 </body>
