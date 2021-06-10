@@ -40,6 +40,9 @@
         <div id="sketchBoardWrap" class="sketch-board-wrap"></div>
         <div id="addonWrap">
             <button id="exportPic">export</button>
+            <button id="setRect">rect</button>
+            <button id="setPolygon">polygon</button>
+            <button id="exportDrawsData">exportDrawsData</button>
             <button id="resetSplitBg">resetSplitBg</button>
             <button id="reloadSpliceBgs">reloadSpliceBgs</button>
             <div id="message"></div>
@@ -48,45 +51,44 @@
     <!-- <script src="./lodash.min.js"></script> -->
     <script type="module">
         import sketchBoard from './sketchBoard.js'
+        // console.log(_detects7)
         const _sketchBoardWrap = document.getElementById('sketchBoardWrap')
         const _previewImg = document.getElementById('previewImg')
         const _exportPic = document.getElementById('exportPic')
+        const _setRect = document.getElementById('setRect')
+        const _setPolygon = document.getElementById('setPolygon')
+        const _exportDrawsData = document.getElementById('exportDrawsData')
         const _resetSplitBg = document.getElementById('resetSplitBg')
         const _reloadSpliceBgs = document.getElementById('reloadSpliceBgs')
         const _message = document.getElementById('message')
+        
         const _addonWrap = document.getElementById('addonWrap')
+
         const _sketchBoardIns = new sketchBoard({
             wrap: _sketchBoardWrap
         })
         _sketchBoardWrap.appendChild(_sketchBoardIns.getWrapDom())
-        // _sketchBoardIns.setDrawType('rect')
-        // _sketchBoardIns.setDrawsData([
-        //     {
-        //         type:'arc',
-        //         radius: 400,
-        //         x: 404,
-        //         y: 404,
+
+        // _sketchBoardIns.setDrawType('rect', true, {
+        //     pencilStyle: {
         //         strokeStyle: 'red'
         //     }
-        // ])
-        // _sketchBoardIns.setBackground({
-        //     src: `./groupPics/3.jpg`,
         // })
+        _sketchBoardIns.setDrawType('polygonfill', true, {
+            // pencilStyle: {
+            //     strokeStyle: 'red'
+            // }
+        })
+    
+        _sketchBoardIns.setDrawsData([{"x":1056,"y":813,"width":469,"height":363,"type":"rect","drawType":"iocrrect","gco":"source-over","zIndex":1,"id":"10e5-4ec185"},{"x":2500,"y":919,"ways":[{"x":1956,"y":1756},{"x":2556,"y":2338},{"x":3319,"y":1913}],"gco":"source-over","type":"polygon","drawType":"polygon","closed":true,"id":"f025-44b794"}])
+        _sketchBoardIns.setBackground({
+            src: `./2mpic.jpg`,
+        })
         
         async function loadPlicBackground() {
             let spliceIndex = 1;
-            let _totalHeight = 0
-            const _draws = [
-                    {
-                        type:'rect',
-                        x: 404,
-                        y: 404,
-                        width: 500,
-                        height: 345,
-                        strokeStyle: 'red',
-                        lineWidth: 7
-                    }
-                ]
+            let _totalHeight = 0;
+            let _finalDraws = []
             while(spliceIndex <= 16) {
                 // console.log(spliceIndex)
                 // const _offsetY = 1002*(spliceIndex-1);
@@ -98,14 +100,15 @@
                     // offsetY: _offsetY,
                     reverse: true,
                 })
+                
                 spliceIndex = spliceIndex + 1
             }
             const _result = _sketchBoardIns.getSpliceBgListTotalSize()
-            _sketchBoardIns.setDrawsData(_draws)
+            _sketchBoardIns.setDrawsData(_finalDraws)
             // console.log(_result)
             // console.dir(_sketchBoardIns.getCanvasDom())
             // console.log(_totalHeight)
-            _sketchBoardIns.revokeWheel()
+            // _sketchBoardIns.revokeWheel()
             // _sketchBoardIns.getCanvasDom().style.height = `${_result.totalHeight}px`
             // _sketchBoardIns.getCanvasDom().height = _result.totalHeight
             _sketchBoardIns.getWrapDom().style.height = `${_result.totalHeight}px`
@@ -129,7 +132,26 @@
             window.URL.revokeObjectURL(a.href);
             document.body.removeChild(a);
         }
-        loadPlicBackground()
+        
+        // loadPlicBackground()
+        _setRect.addEventListener('click', ()=>{
+            _sketchBoardIns.setDrawType('rect', true, {
+                pencilStyle: {
+                    strokeStyle: 'red'
+                }
+            })
+        })
+        _exportDrawsData.addEventListener('click', ()=>{
+            const _draws = _sketchBoardIns.exportDrawsData()
+            console.log(JSON.stringify(_draws))
+        })
+        _setPolygon.addEventListener('click', ()=>{
+            _sketchBoardIns.setDrawType('polygon', true, {
+                pencilStyle: {
+                    strokeStyle: 'red'
+                }
+            })
+        })
         _resetSplitBg.addEventListener('click', ()=>{
             _sketchBoardIns.clearBgList()
         })

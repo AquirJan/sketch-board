@@ -4,7 +4,7 @@ import recordActionHistory from './recordActionHistory.js';
 import cloneDeep from './lodash.clonedeep.js';
 export default class sketchBoard {
   constructor(options) {
-    this.options = Object.assign(
+    this.options = this.mergeDeep(
       {
         wrap: {
           innerHeight: 300,
@@ -97,6 +97,30 @@ export default class sketchBoard {
     this.singleLog = false;
     return this.init();
   }
+  // 深度合并对象
+  mergeDeep(...objects) {
+    // const isObject = obj => obj && typeof obj === 'object';
+    const isObject = obj => obj && obj.constructor === Object;
+    
+    return objects.reduce((prev, obj) => {
+      Object.keys(obj).forEach(key => {
+        const pVal = prev[key];
+        const oVal = obj[key];
+        
+        if (Array.isArray(pVal) && Array.isArray(oVal)) {
+          prev[key] = pVal.concat(...oVal);
+        }
+        else if (isObject(pVal) && isObject(oVal)) {
+          prev[key] = this.mergeDeep(pVal, oVal);
+        }
+        else {
+          prev[key] = oVal;
+        }
+      });
+      
+      return prev;
+    }, {});
+  }
   // 初始化
   init() {
     let _wrapRect = null;
@@ -131,12 +155,12 @@ export default class sketchBoard {
       overflow: 'auto'
     };
     if (this.options.wrapStyle.constructor === Object) {
-      wrapDefaultStyle = Object.assign(wrapDefaultStyle, this.options.wrapStyle);
+      wrapDefaultStyle = this.mergeDeep(wrapDefaultStyle, this.options.wrapStyle);
     } else {
       console.warn('wrapStyle must be an object type');
     }
     if (this.options.style.constructor === Object) {
-      canvasDefaultStyle = Object.assign(canvasDefaultStyle, this.options.style);
+      canvasDefaultStyle = this.mergeDeep(canvasDefaultStyle, this.options.style);
     } else {
       console.warn('style must be an object type');
     }
@@ -269,7 +293,7 @@ export default class sketchBoard {
   }
   // 校验点超出范围
   detectIsPointOutsideLimit(options){
-    const _options = Object.assign({item:undefined},options)
+    const _options = this.mergeDeep({item:undefined},options)
     const {item} = _options;
     let _draws = this.originDraws
     let _limitPolygon = undefined;
@@ -459,7 +483,7 @@ export default class sketchBoard {
   // 拼接背景图
   async spliceBackground(obj={}){
     return new Promise(async resolve=>{
-      const _obj = Object.assign({
+      const _obj = this.mergeDeep({
         offsetX: 0,
         offsetY: 0,
         src: '',
@@ -488,7 +512,7 @@ export default class sketchBoard {
             this.options.adjustDotStyle.lineWidth = 1/this.zoomSize*3
           } else {
             // 顺序插入
-            _bgSection = Object.assign(_bgSection, {
+            _bgSection = this.mergeDeep(_bgSection, {
               offsetX: _obj.offsetX,
               offsetY: _obj.offsetY,
             })
@@ -521,7 +545,7 @@ export default class sketchBoard {
   // 设置背景图
   async setBackground(obj) {
     return new Promise(async resolve => {
-      const _obj = Object.assign(
+      const _obj = this.mergeDeep(
         {
           fillStyle: 'transparent',
           src: ''
@@ -562,7 +586,7 @@ export default class sketchBoard {
   }
   // 设置已有笔刷图
   async setExistBrushPic(obj) {
-    const _obj = Object.assign(
+    const _obj = this.mergeDeep(
       {
         src: ''
       },
@@ -760,10 +784,16 @@ export default class sketchBoard {
       _height = _lastChild.offsetY + _lastChild.height
     }
     let clearSize = {
-      width: _width / this.zoomSize,
-      height: _height / this.zoomSize
+      width: Math.ceil(_width / this.zoomSize),
+      height: Math.ceil(_height / this.zoomSize)
     };
-    this.sbCtx.clearRect(0, 0, clearSize.width, clearSize.height)
+    if (clearSize.width <= this.sbDom.width) {
+      clearSize['width'] = this.sbDom.width
+    }
+    if (clearSize.height <= this.sbDom.height) {
+      clearSize['height'] = this.sbDom.height
+    }
+    this.sbCtx.clearRect(-clearSize.width, -clearSize.height, clearSize.width*3, clearSize.height*3)
   }
   // 规范小数
   normalFloat(floatNumber = 0, fixed = 0) {
@@ -1000,8 +1030,8 @@ export default class sketchBoard {
         this.specifyDrawId = options.id;
       }
       delete options.id;
-      this.options.adjustDotStyle = Object.assign({}, this.options.adjustDotStyle, options.adjustDotStyle);
-      this.options.pencilStyle = Object.assign({}, this.options.pencilStyle, options.pencilStyle);
+      this.options['adjustDotStyle'] = this.mergeDeep(this.options.adjustDotStyle, options.adjustDotStyle||{});
+      this.options.pencilStyle = this.mergeDeep(this.options.pencilStyle, options.pencilStyle||{});
       
       if (this[`${this.drawType}DownFn`]) {
         this.pencilDownFn = e => this[`${this.drawType}DownFn`](e, options);
@@ -1122,7 +1152,7 @@ export default class sketchBoard {
   // 初始化放大镜canvas
   initMagnifier(options){
     if (!this.magnifierDom && document) {
-      const _options = Object.assign({
+      const _options = this.mergeDeep({
         width: '200px',
         height: '200px'
       }, options)
@@ -1187,10 +1217,11 @@ export default class sketchBoard {
   }
   // 指针状态事件
   pointerDownFn(e) {
-    if (this.isObserver) {
-      return;
-    }
+    
     if (e.button === 0) {
+      if (this.isObserver) {
+        return;
+      }
       this.hoverPoint = {
         x: e.offsetX,
         y: e.offsetY
@@ -1266,7 +1297,13 @@ export default class sketchBoard {
     if (!this.pencilPressing) {
       if (!this.pencilPosition) {
         if (!this.spaceBar) {
-          document.documentElement.style.cursor = this.calcIsOnModifyRect(this.hoverPoint.x, this.hoverPoint.y) || this.calcIsOverDraw(this.hoverPoint.x, this.hoverPoint.y) ? 'move' : 'default';
+          const _draw = this.calcIsOverDraws({
+            x: this.hoverPoint.x, 
+            y: this.hoverPoint.y, 
+            // filterList:{ rect: {is_stroke:true} }
+          });
+          const _modify = this.calcIsOnModifyRect(this.hoverPoint.x, this.hoverPoint.y)
+          document.documentElement.style.cursor = _modify || _draw ? 'move' : 'default';
         }
 
         if (this.selectedDraw) {
@@ -1315,24 +1352,19 @@ export default class sketchBoard {
     }
   }
   pointerUpFn(e) {
-    if (this.isObserver) {
-      // this.sbDom.dispatchEvent(new CustomEvent('pointerUp', { bubbles: true, detail: {
-      //   draw: this.selectedDraw,
-      //   point: {
-      //     x: e.clientX,
-      //     y: e.clientY,
-      //   }
-      // }}))
-      return;
-    }
+    
     if (this.rightPressing) {
       this.rightPressing = false;
     }
+    
     if (this.pencilPressing && this.draging) {
       this.dragOffset['x'] = e.offsetX - this.dragDownPoint.x;
       this.dragOffset['y'] = e.offsetY - this.dragDownPoint.y;
       this.draging = false;
       this.pencilPressing = false;
+      return;
+    }
+    if (this.isObserver) {
       return;
     }
     this.hoverPoint = {
@@ -1434,7 +1466,7 @@ export default class sketchBoard {
       }
     }
     this.sbDom.dispatchEvent(
-      new CustomEvent('iocrrectDown', {
+      new CustomEvent('rectDown', {
         bubbles: true,
         detail: {
           point: {
@@ -1463,7 +1495,7 @@ export default class sketchBoard {
       const _onSomeOneRectFlag = this.calcIsOverDraws({
         x: this.hoverPoint.x, 
         y: this.hoverPoint.y, 
-        filterList:{ iocrrect: {is_stroke:false} }
+        // filterList:{ iocrrect: {is_stroke:false} }
       });
       // const _onSomeOneRectFlag = this.calcIsOverDraw(this.hoverPoint.x,this.hoverPoint.y, false);
       
@@ -1527,7 +1559,7 @@ export default class sketchBoard {
       }
     }
     this.sbDom.dispatchEvent(
-      new CustomEvent('iocrrectMove', {
+      new CustomEvent('rectMove', {
         bubbles: true,
         detail: {
           point: {
@@ -1552,7 +1584,7 @@ export default class sketchBoard {
       this.draging = false;
       this.pencilPressing = false;
       this.sbDom.dispatchEvent(
-        new CustomEvent('iocrrectUp', {
+        new CustomEvent('rectUp', {
           bubbles: true,
           detail: {
             point: {
@@ -1622,8 +1654,8 @@ export default class sketchBoard {
       })
     );
   }
-  // 多边形事件
-  polygonDownFn(e) {
+  // 多边形填充事件
+  polygonfillDownFn(e, options) {
     if (e.button === 0) {
       this.hoverPoint = {
         x: e.offsetX,
@@ -1631,37 +1663,136 @@ export default class sketchBoard {
       };
       this.setPencilPosition(this.hoverPoint.x, this.hoverPoint.y);
     }
-  }
-  polygonMoveFn(e) {
-    this.hoverPoint = {
-      x: e.offsetX,
-      y: e.offsetY
-    };
-    // this.drawPolygon(false, true);
-    this.drawPolygon({moving:true})
-  }
-  polygonUpFn(e) {
-    this.hoverPoint = {
-      x: e.offsetX,
-      y: e.offsetY
-    };
-    if (this.detectIsDBClick(e.timeStamp)) {
-      this.setDrawType('pointer', false);
-      this.tmpPolygon['id'] = this.specifyDrawId ? this.specifyDrawId : this.uuidv4Short();
-      this.specifyDrawId = null;
-      this.tmpPolygon['closed'] = true;
-      this.pencilPosition = null;
-      this.detectDrawsIsOverSize();
-      this.originDraws.push(this.tmpPolygon);
-      this.tmpPolygon = null;
-      this.selectedDraw = cloneDeep({
-        data: this.originDraws[this.originDraws.length - 1],
-        index: this.originDraws.length - 1
-      });
-    } else {
-      this.drawPolygon();
+    if (e.button === 2) {
+      if (this.detectIsDBClick(e.timeStamp)) {
+        this.zoomReset();
+      } else {
+        document.documentElement.style.cursor = 'grabbing';
+        if (!this.draging) {
+          this.rightPressing = true;
+          this.pencilPressing = true;
+          this.draging = true;
+          this.dragDownPoint = {
+            x: e.offsetX - this.dragOffset.x,
+            y: e.offsetY - this.dragOffset.y
+          };
+        }
+      }
     }
   }
+  polygonfillMoveFn(e, options) {
+    if ((this.spaceBar || this.rightPressing) && this.pencilPressing && this.draging) {
+      this.dragOffset['x'] = e.offsetX - this.dragDownPoint.x;
+      this.dragOffset['y'] = e.offsetY - this.dragDownPoint.y;
+      return;
+    }
+    this.hoverPoint = {
+      x: e.offsetX,
+      y: e.offsetY
+    };
+    const _x = (this.hoverPoint.x - this.dragOffset.x) / this.zoomSize;
+    const _y = (this.hoverPoint.y - this.dragOffset.y) / this.zoomSize;
+    if (this.detectTwoPointClose(this.tmpPolygon, { x: _x, y: _y }, this.zoomSize)) {
+      document.documentElement.style.cursor = 'all-scroll';
+    } else {
+      document.documentElement.style.cursor = 'crosshair';
+    }
+    this.drawPolygon({moving:true, gco:options.gco})
+    // this.drawPolygon(false, true, options.gco);
+  }
+  polygonfillUpFn(e, options) {
+    if (this.rightPressing) {
+      this.rightPressing = false;
+    }
+    if (this.pencilPressing && this.draging) {
+      this.dragOffset['x'] = e.offsetX - this.dragDownPoint.x;
+      this.dragOffset['y'] = e.offsetY - this.dragDownPoint.y;
+      this.draging = false;
+      this.pencilPressing = false;
+      return;
+    }
+    this.hoverPoint = {
+      x: e.offsetX,
+      y: e.offsetY
+    };
+    const _x = (this.hoverPoint.x - this.dragOffset.x) / this.zoomSize;
+    const _y = (this.hoverPoint.y - this.dragOffset.y) / this.zoomSize;
+    if (!this.tmpPolygon) {
+      // this.drawPolygon(false, false, options.gco);
+      this.drawPolygon({gco:options.gco})
+    } else {
+      if (this.tmpPolygon.ways.length > 1) {
+        if (this.detectTwoPointClose(this.tmpPolygon, { x: _x, y: _y }, this.zoomSize)) {
+          this.setDrawType('pointer', false);
+          this.tmpPolygon['id'] = this.specifyDrawId ? this.specifyDrawId : this.uuidv4Short();
+          this.specifyDrawId = null;
+          this.tmpPolygon['closed'] = true;
+          this.tmpPolygon['fillStyle'] = this.options.pencilStyle.fillStyle;
+          this.pencilPosition = null;
+          this.detectDrawsIsOverSize();
+          this.originDraws.push(this.tmpPolygon);
+          this.tmpPolygon = null;
+          this.selectedDraw = cloneDeep({
+            data: this.originDraws[this.originDraws.length - 1],
+            index: this.originDraws.length - 1
+          });
+
+          // 记录操作
+          if (this.historyRecordHandler) {
+            this.historyRecordHandler.recordChange(this.getAllDraws());
+          }
+        } else {
+          if (!this.detectTwoPointIsNearby(this.tmpPolygon, { x: _x, y: _y }, this.zoomSize)) {
+            this.drawPolygon({gco:options.gco})
+          }
+        }
+        return;
+      }
+      if (!this.tmpPolygon.ways.length || !this.detectTwoPointIsNearby(this.tmpPolygon, { x: _x, y: _y }, this.zoomSize)) {
+        this.drawPolygon({gco:options.gco})
+      }
+    }
+  }
+  // 多边形事件
+  // polygonDownFn(e) {
+  //   if (e.button === 0) {
+  //     this.hoverPoint = {
+  //       x: e.offsetX,
+  //       y: e.offsetY
+  //     };
+  //     this.setPencilPosition(this.hoverPoint.x, this.hoverPoint.y);
+  //   }
+  // }
+  // polygonMoveFn(e) {
+  //   this.hoverPoint = {
+  //     x: e.offsetX,
+  //     y: e.offsetY
+  //   };
+  //   // this.drawPolygon(false, true);
+  //   this.drawPolygon({moving:true})
+  // }
+  // polygonUpFn(e) {
+  //   this.hoverPoint = {
+  //     x: e.offsetX,
+  //     y: e.offsetY
+  //   };
+  //   if (this.detectIsDBClick(e.timeStamp)) {
+  //     this.setDrawType('pointer', false);
+  //     this.tmpPolygon['id'] = this.specifyDrawId ? this.specifyDrawId : this.uuidv4Short();
+  //     this.specifyDrawId = null;
+  //     this.tmpPolygon['closed'] = true;
+  //     this.pencilPosition = null;
+  //     this.detectDrawsIsOverSize();
+  //     this.originDraws.push(this.tmpPolygon);
+  //     this.tmpPolygon = null;
+  //     this.selectedDraw = cloneDeep({
+  //       data: this.originDraws[this.originDraws.length - 1],
+  //       index: this.originDraws.length - 1
+  //     });
+  //   } else {
+  //     this.drawPolygon({closed: false});
+  //   }
+  // }
   // 笔刷事件
   brushDownFn(e) {
     if (e.button === 0 && !this.pencilPressing) {
@@ -2020,7 +2151,7 @@ export default class sketchBoard {
   setPencilStyle({ ctx, strokeStyle, lineDash=[], lineWidth, fillStyle, lineJoin, lineCap, gco='source-over' }) {
     ctx.setLineDash(lineDash);
     ctx.globalCompositeOperation = gco;
-    const _style = Object.assign({
+    const _style = this.mergeDeep({
       strokeStyle: 'black', 
       lineWidth: 3, 
       fillStyle: 'transparent', 
@@ -2198,47 +2329,34 @@ export default class sketchBoard {
         }
         break;
       case 'polygon':
-        if (val.drawType === 'polygonClip') {
-          if (this.bgObj) {
-            this.setPencilStyle({
-              ctx,
-              fillStyle: 'rgba(0, 0, 0, .6)',
-              gco: 'source-over'
-            });
-            ctx.fillRect(0, 0, this.bgObj.width, this.bgObj.height);
-          }
-          
-          this.setPencilStyle({
-            ctx,
-            gco: 'destination-out',
-            strokeStyle: this.options.pencilStyle.strokeStyle,
-            fillStyle: this.options.pencilStyle.fillStyle,
-          });
-          ctx.beginPath();
-          ctx.moveTo(val.x, val.y);
-          val.ways.forEach(wval => {
-            ctx.lineTo(wval.x, wval.y);
-          });
-          ctx.closePath();
+        ctx.globalCompositeOperation = val.gco ? val.gco : 'source-over';
+        if (val.label) {
+          this.labelRect(val, this.zoomSize);
+        }
+        ctx.beginPath();
+        ctx.moveTo(val.x, val.y);
+        val.ways.forEach(wval => {
+          ctx.lineTo(wval.x, wval.y);
+        });
+        ctx.closePath();
+        if (val.fillStyle) {
+          this.setPencilStyle({ 
+            ctx: ctx, 
+            strokeStyle: val.fillStyle, 
+            lineWidth: val.lineWidth, 
+            fillStyle: val.fillStyle,
+            gco:'source-over' 
+          })
           ctx.fill();
         } else {
-          ctx.globalCompositeOperation = val.gco ? val.gco : 'source-over';
-          if (val.label) {
-            this.labelRect(val, this.zoomSize);
-          }
-          ctx.beginPath();
-          ctx.moveTo(val.x, val.y);
-          val.ways.forEach(wval => {
-            ctx.lineTo(wval.x, wval.y);
-          });
-          ctx.closePath();
-          if (val.fillStyle) {
-            this.setCtxStyle(ctx, val.fillStyle, val.lineWidth, val.fillStyle);
-            ctx.fill();
-          } else {
-            this.setCtxStyle(ctx, val.strokeStyle, val.lineWidth);
-            ctx.stroke();
-          }
+          this.setPencilStyle({ 
+            ctx: ctx, 
+            strokeStyle: val.strokeStyle, 
+            lineWidth: val.lineWidth, 
+            fillStyle: val.fillStyle,
+            gco:'source-over' 
+          })
+          ctx.stroke();
         }
         break;
       case 'eraser':
@@ -2393,7 +2511,7 @@ export default class sketchBoard {
   // 导出图片
   exportPic(options) {
     this.setDrawType('pointer');
-    const _options = Object.assign(
+    const _options = this.mergeDeep(
       {},
       {
         type: 'origin', // draws, fusion, algorithm, leiLine-algorithm
@@ -2452,40 +2570,20 @@ export default class sketchBoard {
                 _canvasCtx.stroke(val.path);
                 break;
               case 'polygon':
-                if (val.drawType === 'polygonClip') {
-                  this.setPencilStyle({
-                    ctx:_canvasCtx,
-                    fillStyle: 'black',
-                    gco: 'source-over'
-                  });
-                  _canvasCtx.fillRect(0, 0, this.bgObj.width, this.bgObj.height);
-                  this.setPencilStyle({
-                    ctx:_canvasCtx,
-                    gco: 'destination-out'
-                  });
-                  _canvasCtx.beginPath();
-                  _canvasCtx.moveTo(val.x, val.y);
-                  val.ways.forEach(wval => {
-                    _canvasCtx.lineTo(wval.x, wval.y);
-                  });
-                  _canvasCtx.closePath();
+                _canvasCtx.globalCompositeOperation = val.gco ? val.gco : 'source-over';
+                _canvasCtx.beginPath();
+                _canvasCtx.moveTo(val.x, val.y);
+                val.ways.forEach(wval => {
+                  _canvasCtx.lineTo(wval.x, wval.y);
+                });
+                _canvasCtx.closePath();
+                _canvasCtx.lineWidth = val.lineWidth;
+                if (val.fillStyle) {
+                  _canvasCtx.fillStyle = val.fillStyle;
                   _canvasCtx.fill();
                 } else {
-                  _canvasCtx.globalCompositeOperation = val.gco ? val.gco : 'source-over';
-                  _canvasCtx.beginPath();
-                  _canvasCtx.moveTo(val.x, val.y);
-                  val.ways.forEach(wval => {
-                    _canvasCtx.lineTo(wval.x, wval.y);
-                  });
-                  _canvasCtx.closePath();
-                  _canvasCtx.lineWidth = val.lineWidth;
-                  if (val.fillStyle) {
-                    _canvasCtx.fillStyle = val.fillStyle;
-                    _canvasCtx.fill();
-                  } else {
-                    _canvasCtx.strokeStyle = val.strokeStyle;
-                    _canvasCtx.stroke();
-                  }
+                  _canvasCtx.strokeStyle = val.strokeStyle;
+                  _canvasCtx.stroke();
                 }
                 
                 break;
@@ -2719,12 +2817,7 @@ export default class sketchBoard {
     if (keycode === 27) {
       // esc
       this.selectedDraw = null;
-      if (['polygonClip'].includes(this.drawType)) {
-        this.tmpPolygon = null;
-        this.pencilPosition = null;
-        return;
-      }
-      if (this.drawType !== 'pointer' && this.drawType !== 'polygonClip') {
+      if (this.drawType !== 'pointer') {
         this.modifyRect = null;
         this.setDrawType('pointer');
         document.documentElement.style.cursor = 'default';
@@ -3023,24 +3116,13 @@ export default class sketchBoard {
           }
           break;
         case 'polygon':
-          if (_item.drawType === 'polygonClip') {
-            const _svgPCPath2d = this.drawToSvgPath(_item);
-            if (this.sbCtx.isPointInPath(_svgPCPath2d, x, y)) {
-              _flag = {
-                data: _item,
-                index: i,
-                pointIn: 'inside'
-              };
-            }
-          } else {
-            const _svgPath2d = this.drawToSvgPath(_item);
-            if (this.sbCtx.isPointInStroke(_svgPath2d, x, y)) {
-              _flag = {
-                data: _item,
-                index: i,
-                pointIn: 'stroke'
-              };
-            }
+          const _svgPath2d = this.drawToSvgPath(_item);
+          if (this.sbCtx.isPointInStroke(_svgPath2d, x, y)) {
+            _flag = {
+              data: _item,
+              index: i,
+              pointIn: 'stroke'
+            };
           }
           break;
       }
@@ -3052,7 +3134,7 @@ export default class sketchBoard {
     return _flag;
   }
   // 计算鼠标落在哪些Draws上
-  calcIsOverDraws({x=0, y=0, filterList=undefined, returnType='array'}) {
+  calcIsOverDraws({x=0, y=0, filterList=undefined, is_stroke=false, returnType='array'}) {
     let _matchedDraw = undefined;
     let _need_match_type = filterList ? true : false;
     for (let i = (this.originDraws.length-1); i>=0; i--) {
@@ -3060,6 +3142,7 @@ export default class sketchBoard {
       // 判断是否有特定drawtype判断
       if ( !_need_match_type || (_need_match_type && filterList[_item.drawType])) {
         let _is_stroke = _need_match_type && filterList[_item.drawType] && filterList[_item.drawType].is_stroke ? filterList[_item.drawType].is_stroke : false;
+        console.log(`_is_stroke: ${_is_stroke}`)
         switch (_item.type) {
           case 'rect':
             // 判断鼠标是否在label上
@@ -3102,17 +3185,8 @@ export default class sketchBoard {
             }
             break;
           case 'polygon':
-            if (_item.drawType === 'polygonClip') {
-              const _svgPCPath2d = this.drawToSvgPath(_item);
-              if (this.sbCtx.isPointInPath(_svgPCPath2d, x, y)) {
-                _matchedDraw = {
-                  data: _item,
-                  index: i,
-                  pointIn: 'inside'
-                };
-              }
-            } else {
-              const _svgPath2d = this.drawToSvgPath(_item);
+            const _svgPath2d = this.drawToSvgPath(_item);
+            if (_is_stroke) {
               if (this.sbCtx.isPointInStroke(_svgPath2d, x, y)) {
                 _matchedDraw = {
                   data: _item,
@@ -3120,9 +3194,20 @@ export default class sketchBoard {
                   pointIn: 'stroke'
                 };
               }
+            } else {
+              // 整个检测
+              if(this.sbCtx.isPointInPath(_svgPath2d, x, y)){ 
+                _matchedDraw = {
+                  data: _item,
+                  index: i,
+                  pointIn: 'inside'
+                };
+              }
             }
             break;
         }
+      } else {
+        let _is_stroke = is_stroke
       }
       if (_matchedDraw) {
         break;
@@ -3311,6 +3396,7 @@ export default class sketchBoard {
         gco: gco,
         type: 'polygon',
         drawType: drawType,
+        closed: false,
       };
     } else {
       if (!moving) {
