@@ -42,6 +42,7 @@
             <button id="exportPic">export</button>
             <button id="setRect">rect</button>
             <button id="setPolygon">polygon</button>
+            <button id="setQuadrangle">quadrangle</button>
             <button id="exportDrawsData">exportDrawsData</button>
             <button id="resetSplitBg">resetSplitBg</button>
             <button id="reloadSpliceBgs">reloadSpliceBgs</button>
@@ -57,6 +58,7 @@
         const _exportPic = document.getElementById('exportPic')
         const _setRect = document.getElementById('setRect')
         const _setPolygon = document.getElementById('setPolygon')
+        const _setQuadrangle = document.getElementById('setQuadrangle')
         const _exportDrawsData = document.getElementById('exportDrawsData')
         const _resetSplitBg = document.getElementById('resetSplitBg')
         const _reloadSpliceBgs = document.getElementById('reloadSpliceBgs')
@@ -69,18 +71,21 @@
         })
         _sketchBoardWrap.appendChild(_sketchBoardIns.getWrapDom())
 
-        // _sketchBoardIns.setDrawType('rect', true, {
+        _sketchBoardIns.setDrawType('quadrangle', true, {
+            drawType: 'quadrangle',
+            pencilStyle: {
+                strokeStyle: 'red',
+                fillStyle: undefined
+            }
+        })
+        // _sketchBoardIns.setDrawType('polygon', true, {
         //     pencilStyle: {
-        //         strokeStyle: 'red'
+        //         strokeStyle: 'red',
+        //         fillStyle: 'blue'
         //     }
         // })
-        _sketchBoardIns.setDrawType('polygonfill', true, {
-            // pencilStyle: {
-            //     strokeStyle: 'red'
-            // }
-        })
     
-        _sketchBoardIns.setDrawsData([{"x":1056,"y":813,"width":469,"height":363,"type":"rect","drawType":"iocrrect","gco":"source-over","zIndex":1,"id":"10e5-4ec185"},{"x":2500,"y":919,"ways":[{"x":1956,"y":1756},{"x":2556,"y":2338},{"x":3319,"y":1913}],"gco":"source-over","type":"polygon","drawType":"polygon","closed":true,"id":"f025-44b794"}])
+        // _sketchBoardIns.setDrawsData([{"x":1056,"y":813,"width":469,"height":363,"type":"rect","drawType":"iocrrect","gco":"source-over","zIndex":1,"id":"10e5-4ec185"},{"x":2500,"y":919,"ways":[{"x":1956,"y":1756},{"x":2556,"y":2338},{"x":3319,"y":1913}],"gco":"source-over","type":"polygon","drawType":"polygon","closed":true,"id":"f025-44b794"}])
         _sketchBoardIns.setBackground({
             src: `./2mpic.jpg`,
         })
@@ -136,8 +141,19 @@
         // loadPlicBackground()
         _setRect.addEventListener('click', ()=>{
             _sketchBoardIns.setDrawType('rect', true, {
+                drawType: 'rect',
                 pencilStyle: {
-                    strokeStyle: 'red'
+                    strokeStyle: 'red',
+                    fillStyle: 'blue'
+                }
+            })
+        })
+        _setQuadrangle.addEventListener('click', ()=>{
+            _sketchBoardIns.setDrawType('quadrangle', true, {
+                drawType: 'quadrangle',
+                pencilStyle: {
+                    strokeStyle: 'red',
+                    fillStyle: undefined
                 }
             })
         })
@@ -148,7 +164,8 @@
         _setPolygon.addEventListener('click', ()=>{
             _sketchBoardIns.setDrawType('polygon', true, {
                 pencilStyle: {
-                    strokeStyle: 'red'
+                    strokeStyle: 'red',
+                    fillStyle: 'blue'
                 }
             })
         })

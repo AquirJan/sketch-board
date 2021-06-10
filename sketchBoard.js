@@ -54,7 +54,7 @@ export default class sketchBoard {
     this.existAlogrithmObj = null; // 已有算法特定图
     this.pencilPosition = null;
     this.btnScaleStep = 0.4;
-    this.drawType = 'pointer'; // rect, polygon, brush, eraser, magnifier, arc
+    this.drawType = 'pointer'; // rect, polygon, brush, eraser, magnifier, arc, quadrangle
     this.tmpPolygon = null; // 存放临时 polygon 对象用
     this.zoomSize = 1;
     this.oldZoomSize = 1;
@@ -1030,8 +1030,8 @@ export default class sketchBoard {
         this.specifyDrawId = options.id;
       }
       delete options.id;
-      this.options['adjustDotStyle'] = this.mergeDeep(this.options.adjustDotStyle, options.adjustDotStyle||{});
-      this.options.pencilStyle = this.mergeDeep(this.options.pencilStyle, options.pencilStyle||{});
+      this.options['adjustDotStyle'] = this.mergeDeep(this.options.adjustDotStyle, options.adjustDotStyle || {});
+      this.options['pencilStyle'] = this.mergeDeep(this.options.pencilStyle, options.pencilStyle || {});
       
       if (this[`${this.drawType}DownFn`]) {
         this.pencilDownFn = e => this[`${this.drawType}DownFn`](e, options);
@@ -1596,8 +1596,10 @@ export default class sketchBoard {
       );
       return;
     }
-
-    if (!options.lockDraw) { // 没有禁止画框
+    const {pencilStyle} = this.options;
+    const {label, lockDraw, drawType} = options;
+    
+    if (!lockDraw) { // 没有禁止画框
       if (this.selectedDraw && !this.selectedDraw.data.lock) {
         this.validateRect();
         this.detectDrawsIsOverSize();
@@ -1605,7 +1607,7 @@ export default class sketchBoard {
           this.historyRecordHandler.recordChange(this.getAllDraws());
         }
       } else {
-        let someOneRect = this.drawRect({x:this.hoverPoint.x, y:this.hoverPoint.y, label:options.label, strokeStyle:options.strokeStyle, fillStyle: options.fillStyle, drawType: 'iocrrect'});
+        let someOneRect = this.drawRect({x:this.hoverPoint.x, y:this.hoverPoint.y, label:label, strokeStyle:pencilStyle.strokeStyle, fillStyle: pencilStyle.fillStyle, drawType: drawType});
         const _dx = someOneRect.x + someOneRect.width;
         if (someOneRect.x > _dx) {
           someOneRect.x = _dx;
@@ -1655,7 +1657,7 @@ export default class sketchBoard {
     );
   }
   // 多边形填充事件
-  polygonfillDownFn(e, options) {
+  polygonDownFn(e, options) {
     if (e.button === 0) {
       this.hoverPoint = {
         x: e.offsetX,
@@ -1680,7 +1682,7 @@ export default class sketchBoard {
       }
     }
   }
-  polygonfillMoveFn(e, options) {
+  polygonMoveFn(e, options) {
     if ((this.spaceBar || this.rightPressing) && this.pencilPressing && this.draging) {
       this.dragOffset['x'] = e.offsetX - this.dragDownPoint.x;
       this.dragOffset['y'] = e.offsetY - this.dragDownPoint.y;
@@ -1700,7 +1702,7 @@ export default class sketchBoard {
     this.drawPolygon({moving:true, gco:options.gco})
     // this.drawPolygon(false, true, options.gco);
   }
-  polygonfillUpFn(e, options) {
+  polygonUpFn(e, options) {
     if (this.rightPressing) {
       this.rightPressing = false;
     }
@@ -1727,7 +1729,10 @@ export default class sketchBoard {
           this.tmpPolygon['id'] = this.specifyDrawId ? this.specifyDrawId : this.uuidv4Short();
           this.specifyDrawId = null;
           this.tmpPolygon['closed'] = true;
-          this.tmpPolygon['fillStyle'] = this.options.pencilStyle.fillStyle;
+          if (this.options.pencilStyle.fillStyle) {
+            this.tmpPolygon['fillStyle'] = this.options.pencilStyle.fillStyle;
+          }
+          this.tmpPolygon['strokeStyle'] = this.options.pencilStyle.strokeStyle
           this.pencilPosition = null;
           this.detectDrawsIsOverSize();
           this.originDraws.push(this.tmpPolygon);
@@ -2300,7 +2305,7 @@ export default class sketchBoard {
           strokeStyle: val.strokeStyle,
           lineWidth: val.lineWidth,
           fillStyle: val.fillStyle,
-          gco: 'source-over'
+          gco: val.gco ? val.gco : 'source-over'
         })
         ctx.beginPath();
         ctx.arc(val.x, val.y, val.radius||3, val.startAngle||0, val.endAngle||2*Math.PI, val.anticlockwise||false);
@@ -2318,7 +2323,7 @@ export default class sketchBoard {
           strokeStyle: val.strokeStyle, 
           lineWidth: val.lineWidth,
           fillStyle: val.fillStyle,
-          gco: 'source-over'
+          gco: val.gco ? val.gco : 'source-over'
         })
         if (val.fillStyle) {
           ctx.fillRect(val.x, val.y, val.width, val.height)
@@ -2329,37 +2334,37 @@ export default class sketchBoard {
         }
         break;
       case 'polygon':
-        ctx.globalCompositeOperation = val.gco ? val.gco : 'source-over';
-        if (val.label) {
-          this.labelRect(val, this.zoomSize);
-        }
         ctx.beginPath();
         ctx.moveTo(val.x, val.y);
         val.ways.forEach(wval => {
           ctx.lineTo(wval.x, wval.y);
         });
         ctx.closePath();
+        this.setPencilStyle({ 
+          ctx: ctx, 
+          strokeStyle: val.strokeStyle, 
+          lineWidth: val.lineWidth, 
+          fillStyle: val.fillStyle,
+          gco: val.gco ? val.gco : 'source-over'
+        })
         if (val.fillStyle) {
-          this.setPencilStyle({ 
-            ctx: ctx, 
-            strokeStyle: val.fillStyle, 
-            lineWidth: val.lineWidth, 
-            fillStyle: val.fillStyle,
-            gco:'source-over' 
-          })
           ctx.fill();
-        } else {
-          this.setPencilStyle({ 
-            ctx: ctx, 
-            strokeStyle: val.strokeStyle, 
-            lineWidth: val.lineWidth, 
-            fillStyle: val.fillStyle,
-            gco:'source-over' 
-          })
-          ctx.stroke();
+        }
+        ctx.stroke();
+        if (val.label) {
+          this.labelRect(val, this.zoomSize);
         }
         break;
       case 'eraser':
+        // this.setPencilStyle({ 
+        //   ctx: ctx, 
+        //   lineCap: 'square',
+        //   lineJoin: 'miter',
+        //   strokeStyle: '#fff', 
+        //   lineWidth: val.lineWidth, 
+        //   fillStyle: undefined,
+        //   gco: 'destination-out'
+        // })
         ctx.globalCompositeOperation = 'destination-out';
         ctx.strokeStyle = '#fff';
         ctx.lineCap = 'square';
@@ -2397,7 +2402,6 @@ export default class sketchBoard {
       this.renderSingleOriginDraws(this.sbCtx, _draw);
     } else {
       if (this.originDraws && this.originDraws.length) {
-        
         this.originDraws.forEach(val => {
           this.renderSingleOriginDraws(this.sbCtx, val);
         });
@@ -3142,7 +3146,6 @@ export default class sketchBoard {
       // 判断是否有特定drawtype判断
       if ( !_need_match_type || (_need_match_type && filterList[_item.drawType])) {
         let _is_stroke = _need_match_type && filterList[_item.drawType] && filterList[_item.drawType].is_stroke ? filterList[_item.drawType].is_stroke : false;
-        console.log(`_is_stroke: ${_is_stroke}`)
         switch (_item.type) {
           case 'rect':
             // 判断鼠标是否在label上
@@ -3407,6 +3410,27 @@ export default class sketchBoard {
       }
     }
     this.tmpPolygon['closed'] = closed;
+  }
+  // 绘画4边形
+  drawQuadrangle({x, y, label, strokeStyle, fillStyle, zIndex = 1, gco = 'source-over', drawType=""}) {
+    const _ds = this.getDeltaSize(x, y);
+    const _x = (this.pencilPosition.x - this.dragOffset.x) / this.zoomSize;
+    const _y = (this.pencilPosition.y - this.dragOffset.y) / this.zoomSize;
+    this.tmpRect = {
+      x: _x,
+      y: _y,
+      width: _ds.width,
+      height: _ds.height,
+      ways: [],
+      type: 'quadrangle',
+      drawType: drawType,
+      gco: gco,
+      zIndex,
+      label,
+      strokeStyle,
+      fillStyle
+    };
+    return this.tmpRect;
   }
   // 绘画矩形
   drawRect({x, y, label, strokeStyle, fillStyle, zIndex = 1, gco = 'source-over', drawType=""}) {
