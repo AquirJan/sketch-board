@@ -93,7 +93,7 @@ export default class sketchBoard {
     this.magnifierDom = null; // 放大镜容器 
     this.preventDelete = false; // 是否阻止快捷键删除
     this.spliceBgList = []; // 拼接图片临时数组
-
+    this.leftMouseDown = false; // 鼠标左键按下
     this.singleLog = false;
     return this.init();
   }
@@ -1070,11 +1070,13 @@ export default class sketchBoard {
     if (this.selectedDraw) {
       // 判断是否单选情况
       if (this.selectedDraw.constructor === Object) {
-        const _item = cloneDeep(this.calcIsOverDraws({x:this.hoverPoint.x, y:this.hoverPoint.y}));
-        if (_item && (this.selectedDraw.index !== _item.index || this.selectedDraw.pointIn !== _item.pointIn)) {
-          this.selectedDraw = _item;
-        } else if (this.selectedDraw.pointIn && _item === null) {
-          delete this.selectedDraw.pointIn;
+        const _item = this.calcIsOverDraws({x:this.hoverPoint.x, y:this.hoverPoint.y})
+        if (_item && _item.data && !_item.data.lock) {
+          if (_item && (this.selectedDraw.index !== _item.index || this.selectedDraw.pointIn !== _item.pointIn)) {
+            this.selectedDraw = cloneDeep(_item);
+          } else if (this.selectedDraw.pointIn && _item === null) {
+            delete this.selectedDraw.pointIn;
+          }
         }
       }
       for (let i = 0; i < this.controlDots.length; i++) {
@@ -1090,13 +1092,16 @@ export default class sketchBoard {
         }
       }
     } else {
-      this.selectedDraw = cloneDeep(this.calcIsOverDraws({x:this.hoverPoint.x, y:this.hoverPoint.y}));
+      const _draw = this.calcIsOverDraws({x:this.hoverPoint.x, y:this.hoverPoint.y})
+      if (_draw && _draw.data && !_draw.data.lock) {
+        this.selectedDraw = cloneDeep(_draw);
+      }
     }
 
-    // if (this.selectedDraw && !this.calcIsOnModifyRect(this.hoverPoint.x, this.hoverPoint.y) && !this.tinkerUp && !this.calcIsOverDraws({x:this.hoverPoint.x, y:this.hoverPoint.y})) {
-    //   this.selectedDraw = null;
-    //   this.modifyRect = null;
-    // }
+    if (this.selectedDraw && !this.calcIsOnModifyRect(this.hoverPoint.x, this.hoverPoint.y) && !this.tinkerUp && !this.calcIsOverDraws({x:this.hoverPoint.x, y:this.hoverPoint.y})) {
+      this.selectedDraw = null;
+      this.modifyRect = null;
+    }
   }
 
   // 修正翻转调整后的坐标错误偏差
@@ -1216,8 +1221,11 @@ export default class sketchBoard {
   }
   // 指针状态事件
   pointerDownFn(e) {
-    
+    if (this.pencilPressing) {
+      return;
+    }
     if (e.button === 0) {
+      this.leftMouseDown = true;
       if (this.isObserver) {
         return;
       }
@@ -1234,8 +1242,7 @@ export default class sketchBoard {
         this.selectedDraw['changed'] = false;
         this.selectedDraw['moved'] = false;
       }
-      // if (this.ctrlKey) {
-      // } else {
+
       if (this.spaceBar && !this.draging) {
         this.pencilPressing = true;
         this.draging = true;
@@ -1247,12 +1254,8 @@ export default class sketchBoard {
       }
       this.findOutFoucusDraw(e);
 
-      if (this.pencilPressing) {
-        return;
-      }
-      this.pencilPressing = true;
       this.setPencilPosition(this.hoverPoint.x, this.hoverPoint.y);
-      // }
+
     }
     if (e.button === 2) {
       if (this.detectIsDBClick(e.timeStamp)) {
@@ -1280,6 +1283,10 @@ export default class sketchBoard {
   }
   pointerMoveFn(e) {
     this.hoverDraw = null;
+    document.documentElement.style.cursor = 'default'
+    if (this.leftMouseDown) {
+      this.pencilPressing = true;
+    }
     if ((this.spaceBar || this.rightPressing) && this.pencilPressing && this.draging) {
       this.dragOffset['x'] = e.offsetX - this.dragDownPoint.x;
       this.dragOffset['y'] = e.offsetY - this.dragDownPoint.y;
@@ -1290,19 +1297,19 @@ export default class sketchBoard {
       y: e.offsetY
     };
     if (this.isObserver) {
-      this.hoverDraw = this.calcIsOverDraw(this.hoverPoint.x, this.hoverPoint.y);
+      this.hoverDraw = this.calcIsOverDraws({x:this.hoverPoint.x, y:this.hoverPoint.y});
       return;
     }
     if (!this.pencilPressing) {
       if (!this.pencilPosition) {
-        if (!this.spaceBar) {
-          const _draw = this.calcIsOverDraws({
-            x: this.hoverPoint.x, 
-            y: this.hoverPoint.y, 
-            // filterList:{ rect: {is_stroke:true} }
-          });
+        const _draw = this.calcIsOverDraws({
+          x: this.hoverPoint.x, 
+          y: this.hoverPoint.y, 
+          // filterList:{ rect: {is_stroke:true} }
+        });
+        if (_draw && _draw.data && !_draw.data.lock) {
           const _modify = this.calcIsOnModifyRect(this.hoverPoint.x, this.hoverPoint.y)
-          document.documentElement.style.cursor = _modify || _draw ? 'move' : 'default';
+          document.documentElement.style.cursor = _modify || _draw ? 'move' : 'default'
         }
 
         if (this.selectedDraw) {
@@ -1317,6 +1324,7 @@ export default class sketchBoard {
         }
       }
     } else {
+      // console.log(this.selectedDraw)
       if (this.selectedDraw) {
         if (this.tinkerUp) {
           // console.log('调整尺寸')
@@ -1351,7 +1359,7 @@ export default class sketchBoard {
     }
   }
   pointerUpFn(e) {
-    
+    this.leftMouseDown = false;
     if (this.rightPressing) {
       this.rightPressing = false;
     }
@@ -1370,6 +1378,7 @@ export default class sketchBoard {
       x: e.offsetX,
       y: e.offsetY
     };
+    // this.pencilPressing 代表有鼠标按着
     if (this.pencilPressing) {
       if (this.selectedDraw) {
         this.validateRect();
@@ -1734,7 +1743,7 @@ export default class sketchBoard {
       const _onSomeOneRectFlag = this.calcIsOverDraws({
         x: this.hoverPoint.x, 
         y: this.hoverPoint.y, 
-        // filterList:{ iocrrect: {is_stroke:false} }
+        // filterList:{ rect: {is_stroke:false} }
       });
       // const _onSomeOneRectFlag = this.calcIsOverDraw(this.hoverPoint.x,this.hoverPoint.y, false);
       
@@ -1883,7 +1892,7 @@ export default class sketchBoard {
     this.pencilPosition = null;
 
     this.sbDom.dispatchEvent(
-      new CustomEvent('iocrrectUp', {
+      new CustomEvent('rectUp', {
         bubbles: true,
         detail: {
           draw: this.selectedDraw,
@@ -2212,15 +2221,17 @@ export default class sketchBoard {
     let tmp_selectedDraw = [];
     if (this.tmpRect && this.originDraws && this.originDraws.constructor === Array && this.originDraws.length) {
       this.originDraws.forEach((val, index) => {
-        if (val.type === 'rect') {
-          if (val.x >= this.tmpRect.x && this.tmpRect.x + this.tmpRect.width >= val.x + val.width && val.y >= this.tmpRect.y && this.tmpRect.y + this.tmpRect.height >= val.y + val.height) {
-            tmp_selectedDraw.push({ data: val, index: index });
+        if (!val.lock) {
+          if (val.type === 'rect') {
+            if (val.x >= this.tmpRect.x && this.tmpRect.x + this.tmpRect.width >= val.x + val.width && val.y >= this.tmpRect.y && this.tmpRect.y + this.tmpRect.height >= val.y + val.height) {
+              tmp_selectedDraw.push({ data: val, index: index });
+            }
           }
-        }
-        if (val.type === 'polygon') {
-          const _modifyRect = this.findOut4Poles(val, true);
-          if (_modifyRect.x >= this.tmpRect.x && this.tmpRect.x + this.tmpRect.width >= _modifyRect.x + _modifyRect.width && _modifyRect.y >= this.tmpRect.y && this.tmpRect.y + this.tmpRect.height >= _modifyRect.y + _modifyRect.height) {
-            tmp_selectedDraw.push({ data: val, index: index });
+          if (val.type === 'polygon') {
+            const _modifyRect = this.findOut4Poles(val, true);
+            if (_modifyRect.x >= this.tmpRect.x && this.tmpRect.x + this.tmpRect.width >= _modifyRect.x + _modifyRect.width && _modifyRect.y >= this.tmpRect.y && this.tmpRect.y + this.tmpRect.height >= _modifyRect.y + _modifyRect.height) {
+              tmp_selectedDraw.push({ data: val, index: index });
+            }
           }
         }
       });
