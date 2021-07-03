@@ -1103,7 +1103,16 @@ export default class sketchBoard {
       this.modifyRect = null;
     }
   }
-
+  // 程序方式选定draw
+  selectDrawAction(i) {
+    if (this.originDraws[i] && !this.originDraws[i].lock) {
+      this.selectedDraw = cloneDeep({
+        data: this.originDraws[i],
+        index: i,
+        pointIn: 'inside'
+      })
+    }
+  }
   // 修正翻转调整后的坐标错误偏差
   validateRect() {
     if (this.selectedDraw.constructor === Object) {
@@ -2633,7 +2642,7 @@ export default class sketchBoard {
           this.labelRect(val, this.zoomSize);
         }
         // this.setPencilStyle({
-        //   rotate: 0,
+        //   rotate: -val.rotate || 0,
         //   ctx: ctx
         // })
         break;
@@ -2813,6 +2822,7 @@ export default class sketchBoard {
       },
       options
     );
+    
     return new Promise(resolve => {
       try {
         const _canvas = document.createElement('canvas');
@@ -2833,6 +2843,10 @@ export default class sketchBoard {
               case 'rect':
                 _canvasCtx.strokeStyle = val.strokeStyle ? val.strokeStyle : this.options.pencilStyle.strokeStyle;
                 _canvasCtx.lineWidth = val.lineWidth ? val.lineWidth : this.options.pencilStyle.lineWidth;
+                if (val.fillStyle) {
+                  _canvasCtx.fillStyle = val.fillStyle
+                  _canvasCtx.fillRect(val.x, val.y, val.width, val.height);  
+                }
                 _canvasCtx.strokeRect(val.x, val.y, val.width, val.height);
                 if (val.label) {
                   this.labelRect(val, this.zoomSize, _canvasCtx);
@@ -2919,15 +2933,38 @@ export default class sketchBoard {
               _canvasCtx.fillRect(0, 0, this.bgObj.width, this.bgObj.height);
             }
           }
+          const _img = _canvas.toDataURL('image/png', _options.quality);
+          
           if (_img) {
+            if (_options.buffer) {
+              const imageData = _canvasCtx.getImageData(0, 0, this.bgObj.width, this.bgObj.height);
+              const data = imageData.data;
+              let buffer = new ArrayBuffer(data.length);
+              let binary = new Uint8Array(buffer);
+              for (let i=0; i<binary.length; i++) {
+                binary[i] = data[i];
+              }
+              resolve({
+                success: true,
+                data: binary,
+                message: 'export pic buffer success'
+              })
+            }
             if (_options.file) {
-              _canvas.toBlob((blob) => {
-                resolve({
-                  success: true,
-                  data: this.blobToFile(blob, _options.file.name, _options.file.options),
-                  message: 'export pic file success'
-                })
-              });
+              resolve({
+                success: true,
+                data: this.blobToFile(this.b64toBlob(_img), _options.file.name, _options.file.options),
+                message: 'export pic file success'
+              })
+              
+              // _canvas.toBlob((blob) => {
+              //   console.log(blob)
+              //   resolve({
+              //     success: true,
+              //     data: this.blobToFile(blob, _options.file.name, _options.file.options),
+              //     message: 'export pic file success'
+              //   })
+              // });
             }
             return resolve({
               success: true,

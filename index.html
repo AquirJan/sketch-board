@@ -71,13 +71,13 @@
         })
         _sketchBoardWrap.appendChild(_sketchBoardIns.getWrapDom())
 
-        // _sketchBoardIns.setDrawType('quadrangle', true, {
-        //     drawType: 'quadrangle',
-        //     pencilStyle: {
-        //         strokeStyle: 'red',
-        //         fillStyle: undefined
-        //     }
-        // })
+        _sketchBoardIns.setDrawType('quadrangle', true, {
+            drawType: 'quadrangle',
+            pencilStyle: {
+                strokeStyle: 'red',
+                fillStyle: undefined
+            }
+        })
         // _sketchBoardIns.setDrawType('polygon', true, {
         //     pencilStyle: {
         //         strokeStyle: 'red',
@@ -85,14 +85,18 @@
         //     }
         // })
     
-        _sketchBoardIns.setDrawsData([
-            {"lock":true,"x":1922,"y":653,"ways":[{"x":1012,"y":1521},{"x":1503,"y":2365},{"x":3006,"y":1443}],"gco":"source-over","type":"polygon","drawType":"polygon","closed":true,"id":"2b50-47cdaf","fillStyle":"transparent","strokeStyle":"blue"},
-            {"lock":false,"x":1922,"y":653,"ways":[{"x":1012,"y":1521},{"x":1503,"y":2365},{"x":3006,"y":1443}],"gco":"source-over","type":"polygon","drawType":"polygon","closed":true,"id":"2b50-47cdaf","fillStyle":"transparent","strokeStyle":"green"}
-        ])
+        // _sketchBoardIns.setDrawsData([
+        //     {"lock":true,"x":1922,"y":653,"ways":[{"x":1012,"y":1521},{"x":1503,"y":2365},{"x":3006,"y":1443}],"gco":"source-over","type":"polygon","drawType":"polygon","closed":true,"id":"2b50-47cdaf","fillStyle":"transparent","strokeStyle":"blue"},
+        //     {"lock":false,"x":1922,"y":653,"ways":[{"x":1012,"y":1521},{"x":1503,"y":2365},{"x":3006,"y":1443}],"gco":"source-over","type":"polygon","drawType":"polygon","closed":true,"id":"2b50-47cdaf","fillStyle":"transparent","strokeStyle":"green"}
+        // ])
         _sketchBoardIns.setBackground({
             src: `./2mpic.jpg`,
         })
-        
+        _sketchBoardIns.setDrawsData([{"x":3053,"y":626,"width":350,"height":354,"type":"rect","drawType":"rect","gco":"source-over","zIndex":1,"strokeStyle":"red","fillStyle":"blue","id":"5637-40d68c"}])
+        // _sketchBoardIns.selectDrawAction(1)
+        // _sketchBoardIns.getCanvasDom().addEventListener('pointerUp', (e)=>{
+        //     _sketchBoardIns.selectDrawAction(1)
+        // })
         async function loadPlicBackground() {
             let spliceIndex = 1;
             let _totalHeight = 0;
@@ -182,16 +186,23 @@
             _message.innerHTML = 'loading...'
             setTimeout(()=> {
                 _sketchBoardIns.exportPic({
-                    type: 'splice',
-                    zoomSize: 0.95
+                    type: 'fusion',
+                    // zoomSize: 0.95
                 }).then(res=>{
                     _message.innerHTML = 'success...'
+                    console.log(res)
                     const {success, data, message} = res;
-                    if (data) {
-                        downloadFile(data, data.name)
-                    } else {
-                        _message.innerHTML = 'oversize...'
-                    }
+
+                    fetch({
+                        method: 'post',
+                        url: 'http://localhost:3030/v2ray/savePic',
+                        data: JSON.stringify({data:data})
+                    })
+                    // if (data) {
+                    //     downloadFile(data, data.name)
+                    // } else {
+                    //     _message.innerHTML = 'oversize...'
+                    // }
                     // const newImg = document.createElement("img");
                     // newImg.style.cssText = `width: 100%;display:block;`
                     // newImg.onload = () => {
