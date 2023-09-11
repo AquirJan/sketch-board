@@ -187,17 +187,18 @@
             setTimeout(()=> {
                 _sketchBoardIns.exportPic({
                     type: 'fusion',
+                    file: false,
                     // zoomSize: 0.95
                 }).then(res=>{
                     _message.innerHTML = 'success...'
                     console.log(res)
                     const {success, data, message} = res;
 
-                    fetch({
-                        method: 'post',
-                        url: 'http://localhost:3030/v2ray/savePic',
-                        data: JSON.stringify({data:data})
-                    })
+                    // fetch({
+                    //     method: 'post',
+                    //     url: 'http://localhost:3030/v2ray/savePic',
+                    //     data: JSON.stringify({data:data})
+                    // })
                     // if (data) {
                     //     downloadFile(data, data.name)
                     // } else {
