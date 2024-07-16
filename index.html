@@ -48,6 +48,7 @@
             <button id="setQuadrangle">quadrangle</button>
             <button id="exportDrawsData">exportDrawsData</button>
             <button id="resetSplitBg">resetSplitBg</button>
+            <button id="renderNextFrame">renderNextFrame</button>
             <button id="reloadSpliceBgs">reloadSpliceBgs</button>
             <div id="message"></div>
             <a href="#" class="button" id="btn-download" download="my-file-name.png">Download</a>
@@ -69,6 +70,7 @@
         const _exportDrawsData = document.getElementById('exportDrawsData')
         const _resetSplitBg = document.getElementById('resetSplitBg')
         const _reloadSpliceBgs = document.getElementById('reloadSpliceBgs')
+        const _renderNextFrame = document.getElementById('renderNextFrame')
         const _message = document.getElementById('message')
         
         const _addonWrap = document.getElementById('addonWrap')
@@ -87,17 +89,18 @@
         });
 
         const _sketchBoardIns = new sketchBoard({
-            wrap: _sketchBoardWrap
+            wrap: _sketchBoardWrap,
+            // stepRender: true,
         })
         _sketchBoardWrap.appendChild(_sketchBoardIns.getWrapDom())
 
-        _sketchBoardIns.setDrawType('quadrangle', true, {
-            drawType: 'quadrangle',
-            pencilStyle: {
-                strokeStyle: 'red',
-                fillStyle: undefined
-            }
-        })
+        // _sketchBoardIns.setDrawType('quadrangle', true, {
+        //     drawType: 'quadrangle',
+        //     pencilStyle: {
+        //         strokeStyle: 'red',
+        //         fillStyle: undefined
+        //     }
+        // })
         // _sketchBoardIns.setDrawType('polygon', true, {
         //     pencilStyle: {
         //         strokeStyle: 'red',
@@ -204,6 +207,9 @@
         })
         _reloadSpliceBgs.addEventListener('click', ()=>{
             loadPlicBackground()
+        })
+        _renderNextFrame.addEventListener('click', ()=>{
+            _sketchBoardIns?.renderBoard()
         })
         _exportPic.addEventListener('click', ()=>{
             _message.innerHTML = 'loading...'
