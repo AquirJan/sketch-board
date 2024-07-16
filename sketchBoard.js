@@ -16,7 +16,7 @@ export default class sketchBoard {
         recordHistory: true,
         adjustDotStyle: {
           safeGap: 2,
-          lineWidth: 2,
+          lineWidth: 3,
           fillStyle: '#2ac2e4',
           strokeStyle: '#eee',
         },
@@ -36,7 +36,10 @@ export default class sketchBoard {
       },
       options
     );
-    console.log(this.options)
+
+    this.dotOriginLineWidth = Number(this.options.adjustDotStyle.lineWidth)
+    this.pencilOriginLineWidth = Number(this.options.pencilStyle.lineWidth)
+    
     this.version='1.0.1'
     this.animationFrameId = undefined;
     this.sbCtx = null;
@@ -270,10 +273,9 @@ export default class sketchBoard {
       this.zoomSize = this.bgObj.scaled;
       console.log(`this.zoomSize: ${this.zoomSize}`)
 
-      console.log(`this.options.adjustDotStyle.lineWidth: ${this.options.adjustDotStyle.lineWidth}`)
-      this.options.pencilStyle.lineWidth = this.options.pencilStyle.lineWidth/this.zoomSize
-      this.options.adjustDotStyle.lineWidth = this.options.adjustDotStyle.lineWidth/this.zoomSize
-      console.log(`this.options.adjustDotStyle.lineWidth: ${this.options.adjustDotStyle.lineWidth}`)
+      this.options.pencilStyle.lineWidth = this.pencilOriginLineWidth/this.zoomSize
+      this.options.adjustDotStyle.lineWidth = this.dotOriginLineWidth/this.zoomSize
+      
       this.dragOffset = {
         x: this.bgObj.offsetX,
         y: this.bgObj.offsetY
@@ -1022,9 +1024,9 @@ export default class sketchBoard {
         this.specifyDrawId = options.id;
       }
       delete options.id;
-      console.log(options.adjustDotStyle)
+      
       this.options['adjustDotStyle'] = Object.assign(this.options.adjustDotStyle, (options?.adjustDotStyle ?? {}));
-      console.log(this.options['adjustDotStyle'])
+      
       this.options['pencilStyle'] = Object.assign(this.options.pencilStyle, options.pencilStyle || {});
       
       if (this[`${this.drawType}DownFn`]) {

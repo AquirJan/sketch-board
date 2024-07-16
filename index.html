@@ -45,7 +45,7 @@
             <button id="setRect">rect</button>
             <button id="setEraser">eraser</button>
             <button id="setPolygon">polygon</button>
-            <button id="setQuadrangle">quadrangle</button>
+            <!-- <button id="setQuadrangle">quadrangle</button> -->
             <button id="exportDrawsData">exportDrawsData</button>
             <button id="resetSplitBg">resetSplitBg</button>
             <button id="renderNextFrame">renderNextFrame</button>
@@ -66,7 +66,7 @@
         const _setRect = document.getElementById('setRect')
         const _setEraser = document.getElementById('setEraser')
         const _setPolygon = document.getElementById('setPolygon')
-        const _setQuadrangle = document.getElementById('setQuadrangle')
+        // const _setQuadrangle = document.getElementById('setQuadrangle')
         const _exportDrawsData = document.getElementById('exportDrawsData')
         const _resetSplitBg = document.getElementById('resetSplitBg')
         const _reloadSpliceBgs = document.getElementById('reloadSpliceBgs')
@@ -181,15 +181,15 @@
         _setEraser.addEventListener('click', ()=>{
             _sketchBoardIns.setDrawType('eraser', true)
         })
-        _setQuadrangle.addEventListener('click', ()=>{
-            _sketchBoardIns.setDrawType('quadrangle', true, {
-                drawType: 'quadrangle',
-                pencilStyle: {
-                    strokeStyle: 'red',
-                    fillStyle: undefined
-                }
-            })
-        })
+        // _setQuadrangle.addEventListener('click', ()=>{
+        //     _sketchBoardIns.setDrawType('quadrangle', true, {
+        //         drawType: 'quadrangle',
+        //         pencilStyle: {
+        //             strokeStyle: 'red',
+        //             fillStyle: undefined
+        //         }
+        //     })
+        // })
         _exportDrawsData.addEventListener('click', ()=>{
             const _draws = _sketchBoardIns.exportDrawsData()
             console.log(JSON.stringify(_draws))
