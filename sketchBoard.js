@@ -405,14 +405,14 @@ export default class sketchBoard {
   }
   // 获取历史操作记录
   getHistoryRecords() {
-    return this.historyRecordHandler ? this.historyRecordHandler.getHistoryArray() : [];
+    return this.historyRecordHandler?.getHistoryArray() ?? [];
   }
   getHistoryRecordsLength() {
-    return this.historyRecordHandler ? this.historyRecordHandler.getHistoryArrayLength() : 0;
+    return this.historyRecordHandler?.getHistoryArrayLength() ?? 0;
   }
   // 获取历史操作记录
-  getRevokedStep() {
-    return this.historyRecordHandler ? this.historyRecordHandler.getRevokedStep() : 0;
+  getRecordStep() {
+    return this.historyRecordHandler?.getRecordStep() ?? 0;
   }
   // 清空历史操作
   reinitRecordHistory(historys) {
